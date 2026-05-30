@@ -160,6 +160,39 @@
   </div>
   <main id="main"><div class="loading">Carregando…</div></main>
 </div>
+
+<!-- TELA DE LOGIN — sempre presente no HTML, controlada por display -->
+<div id="login-screen" style="position:fixed;inset:0;background:linear-gradient(135deg,#0d3a73 0%,#1f5fb8 60%,#2d7dd2 100%);display:flex;align-items:center;justify-content:center;z-index:9999">
+  <div style="background:#fff;border-radius:16px;padding:36px 40px;width:100%;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,.35)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="width:56px;height:56px;border-radius:12px;background:#1f5fb8;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;margin:0 auto 12px">ML</div>
+      <div style="font-family:Archivo,sans-serif;font-weight:800;font-size:22px;color:#1d2733">Controle de Estoque</div>
+      <div style="font-size:11px;letter-spacing:.12em;color:#8b94a3;text-transform:uppercase;margin-top:3px">SMG6 · Mercado Livre</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#5b6675;font-weight:600;display:block;margin-bottom:5px">E-mail corporativo</label>
+        <input id="li_email" type="email" placeholder="usuario@mercadolivre.com" autocomplete="email"
+          style="width:100%;border:1px solid #d3dae4;border-radius:8px;padding:11px 13px;font-size:14px;font-family:inherit">
+      </div>
+      <div>
+        <label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#5b6675;font-weight:600;display:block;margin-bottom:5px">Senha</label>
+        <input id="li_senha" type="password" placeholder="••••••••" autocomplete="current-password"
+          style="width:100%;border:1px solid #d3dae4;border-radius:8px;padding:11px 13px;font-size:14px;font-family:inherit">
+      </div>
+      <div id="li_err" style="color:#d23b30;font-size:12.5px;min-height:16px;text-align:center"></div>
+      <button id="li_btn" onclick="doLogin()"
+        style="background:#1f5fb8;color:#fff;border:none;border-radius:8px;padding:13px;font-weight:700;font-size:15px;font-family:Archivo,sans-serif;letter-spacing:.04em;cursor:pointer;width:100%;text-transform:uppercase">
+        Entrar
+      </button>
+    </div>
+    <div id="li_cfg_warn" style="display:none;margin-top:12px;background:#fbe5e3;border:1px solid #f5c6c2;border-radius:8px;padding:10px 14px;font-size:12px;color:#d23b30;text-align:center">
+      ⚠ Apps Script URL não configurada.<br>Edite o arquivo e cole a URL na linha 192.
+    </div>
+    <div style="text-align:center;margin-top:18px;font-size:11px;color:#8b94a3">Acesso restrito a <b>@mercadolivre.com</b></div>
+  </div>
+</div>
+
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div id="toasts"></div>
 
@@ -428,40 +461,23 @@ async function backupManual(){toast("Os dados são salvos automaticamente no She
 /* ================= LOGIN ================= */
 function showLogin(){
   document.getElementById("app").style.display="none";
-  var loginDiv=document.getElementById("login-screen");
-  if(!loginDiv){
-    loginDiv=document.createElement("div");
-    loginDiv.id="login-screen";
-    loginDiv.style.cssText="position:fixed;inset:0;background:linear-gradient(135deg,#0d3a73 0%,#1f5fb8 60%,#2d7dd2 100%);display:flex;align-items:center;justify-content:center;z-index:9999";
-    loginDiv.innerHTML=''
-      +'<div style="background:#fff;border-radius:16px;padding:36px 40px;width:100%;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,.35)">'
-      +'<div style="text-align:center;margin-bottom:28px">'
-      +'<div style="width:56px;height:56px;border-radius:12px;background:#1f5fb8;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;margin:0 auto 12px">ML</div>'
-      +'<div style="font-family:Archivo,sans-serif;font-weight:800;font-size:22px;color:#1d2733">Controle de Estoque</div>'
-      +'<div style="font-size:11px;letter-spacing:.12em;color:#8b94a3;text-transform:uppercase;margin-top:3px">SMG6 · Mercado Livre</div>'
-      +'</div>'
-      +'<div style="display:flex;flex-direction:column;gap:12px">'
-      +'<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#5b6675;font-weight:600;display:block;margin-bottom:5px">E-mail corporativo</label>'
-      +'<input id="li_email" type="email" placeholder="usuario@mercadolivre.com" autocomplete="email" '
-      +'style="width:100%;border:1px solid #d3dae4;border-radius:8px;padding:11px 13px;font-size:14px;font-family:inherit"></div>'
-      +'<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#5b6675;font-weight:600;display:block;margin-bottom:5px">Senha</label>'
-      +'<input id="li_senha" type="password" placeholder="••••••••" autocomplete="current-password" '
-      +'style="width:100%;border:1px solid #d3dae4;border-radius:8px;padding:11px 13px;font-size:14px;font-family:inherit"></div>'
-      +'<div id="li_err" style="color:#d23b30;font-size:12.5px;min-height:16px;text-align:center"></div>'
-      +'<button id="li_btn" onclick="doLogin()" '
-      +'style="background:#1f5fb8;color:#fff;border:none;border-radius:8px;padding:13px;font-weight:700;font-size:15px;font-family:Archivo,sans-serif;letter-spacing:.04em;cursor:pointer;width:100%;text-transform:uppercase">Entrar</button>'
-      +'</div>'
-      +'<div style="text-align:center;margin-top:18px;font-size:11px;color:#8b94a3">Acesso restrito a <b>@mercadolivre.com</b></div>'
-      +'</div>';
-    document.body.appendChild(loginDiv);
-    setTimeout(function(){document.getElementById("li_email").focus();},100);
-    ["li_email","li_senha"].forEach(function(id){
-      var el=document.getElementById(id);
-      if(el)el.addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
-    });
-  }else{
-    loginDiv.style.display="flex";
-  }
+  var ls=document.getElementById("login-screen");
+  if(ls) ls.style.display="flex";
+  // Verificar se URL do Apps Script está configurada
+  var warn=document.getElementById("li_cfg_warn");
+  if(warn) warn.style.display=(APPS_SCRIPT_URL==="COLE_A_URL_DO_APPS_SCRIPT_AQUI")?"block":"none";
+  // Focar no campo email
+  setTimeout(function(){
+    var em=document.getElementById("li_email"); if(em) em.focus();
+  },100);
+  // Enter nos campos
+  ["li_email","li_senha"].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el && !el._hasEnter){
+      el._hasEnter=true;
+      el.addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+    }
+  });
 }
 
 async function loadAll(){
@@ -496,7 +512,8 @@ async function doLogin(){
   setSession(r.token,r.user);
   var ls=document.getElementById("login-screen");
   if(ls)ls.style.display="none";
-  document.getElementById("app").style.display="";
+  var appEl=document.getElementById("app");
+  if(appEl)appEl.style.display="";
   // Atualizar header com usuário logado
   var saveEl=document.getElementById("save");
   if(saveEl)saveEl.textContent=r.user.nome||r.user.email;
@@ -524,6 +541,11 @@ function doLogout(){
   clearSession();
   PRODUTOS=[];MOVS=[];DESLIGADOS=[];
   document.getElementById("app").style.display="none";
+  var ls=document.getElementById("login-screen");
+  if(ls){ls.style.display="flex";}
+  var em=document.getElementById("li_email");if(em)em.value="";
+  var sn=document.getElementById("li_senha");if(sn)sn.value="";
+  var er=document.getElementById("li_err");if(er)er.textContent="";
   showLogin();
 }
 
@@ -533,6 +555,8 @@ function viewUsuarios(){
   state.view="usuarios";
   render();
 }
+
+var _uCache = {}; // cache de objetos usuario por email
 
 function viewUsuariosPanel(){
   var html='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">'
@@ -550,7 +574,9 @@ function viewUsuariosPanel(){
     if(!el)return;
     if(!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r.error)+'</div>';return;}
     if(!r.data||!r.data.length){el.innerHTML='<div class="empty">Nenhum usuário cadastrado.</div>';return;}
+    _uCache={};
     var rows=r.data.map(function(u){
+      _uCache[u.email]=u;
       var chip=u.nivel==="admin"
         ?'<span class="chip warn">admin</span>'
         :u.nivel==="operador"
@@ -572,8 +598,8 @@ function viewUsuariosPanel(){
         +'<td>'+chip+'</td>'
         +'<td style="font-size:11px;color:var(--txt-dim)">'+ultimoAcesso+'</td>'
         +'<td class="num" style="display:flex;gap:4px">'
-        +'<button class="btn ghost sm" onclick='_uEditar('+JSON.stringify(u)+')'>✎ Editar</button>'
-        +'<button class="btn danger sm" onclick='_uReset("'+esc(u.email)+'")'>↺ Reset Senha</button>'
+        +'<button class="btn ghost sm" onclick="_uEditar(\'' + esc(u.email) + '\')">✎ Editar</button>'
+        +'<button class="btn danger sm" onclick="_uReset(\'' + esc(u.email) + '\')">↺ Reset Senha</button>'
         +'</td></tr>';
     }).join("");
     el.innerHTML='<div class="scroll-y" style="max-height:500px"><table>'
@@ -585,8 +611,8 @@ function viewUsuariosPanel(){
 function _uNovo(){
   _uForm(null);
 }
-function _uEditar(u){
-  _uForm(u);
+function _uEditar(email){
+  _uForm(_uCache[email]||null);
 }
 function _uForm(u){
   var isNew=!u;
