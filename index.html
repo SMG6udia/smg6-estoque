@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Estoque · SMG6</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#1f5fb8;--blue-d:#16498f;--blue-l:#dbe9fb;--blue-sel:#cfe0f7;
+    --bg:#eef1f5;--panel:#ffffff;--line:#d3dae4;--line-soft:#e6ebf1;
+    --txt:#1d2733;--txt-dim:#5b6675;--txt-faint:#8b94a3;
+    --green:#1f9d55;--green-bg:#e3f5ea;--red:#d23b30;--red-bg:#fbe5e3;
+    --amber:#b8860b;--amber-bg:#fdf3da;
+    --mono:"IBM Plex Mono",monospace;--disp:"Archivo",sans-serif;--body:"IBM Plex Sans",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--body);font-size:13.5px;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-thumb{background:#c3ccd8;border-radius:6px;border:2px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:#aab6c6}
+  .app{display:flex;flex-direction:column;min-height:100vh}
+  header{background:linear-gradient(180deg,var(--blue) 0%,var(--blue-d) 100%);color:#fff;display:flex;align-items:center;padding:0 18px;height:52px;box-shadow:0 1px 0 rgba(0,0,0,.15)}
+  .logo{display:flex;align-items:center;gap:11px}
+  .logo .mark{width:30px;height:30px;border-radius:7px;background:#fff;color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:800;font-size:15px}
+  .logo h1{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:.3px}
+  .logo .u{font-family:var(--mono);font-size:10px;opacity:.8;letter-spacing:.15em;margin-top:1px}
+  .dom-tabs{display:flex;margin-left:26px;gap:3px}
+  .dom-tab{background:rgba(255,255,255,.12);border:none;color:#fff;padding:8px 20px;border-radius:7px 7px 0 0;font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.04em;cursor:pointer;transition:.13s;opacity:.8}
+  .dom-tab:hover{opacity:1;background:rgba(255,255,255,.2)}
+  .dom-tab.active{background:var(--bg);color:var(--blue-d);opacity:1}
+  .head-right{margin-left:auto;font-size:11px;font-family:var(--mono);opacity:.85;display:flex;gap:18px;align-items:center}
+  .menu{background:#f6f8fb;border-bottom:1px solid var(--line);display:flex;padding:0 14px;gap:2px}
+  .menu button{background:none;border:none;border-bottom:2px solid transparent;padding:10px 16px;font-family:var(--body);font-weight:600;font-size:13.5px;color:var(--txt-dim);cursor:pointer;transition:.12s}
+  .menu button:hover{color:var(--txt)}
+  .menu button.active{color:var(--blue);border-bottom-color:var(--blue)}
+  main{flex:1;padding:14px;display:flex;flex-direction:column;gap:12px}
+  .toolbar{background:var(--panel);border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;padding:8px 10px;gap:6px;flex-wrap:wrap}
+  .tbtn{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 13px;cursor:pointer;font-family:var(--body);font-weight:600;font-size:13px;color:var(--txt);transition:.12s}
+  .tbtn:hover{border-color:var(--blue);background:#f3f8ff;color:var(--blue-d)}
+  .tbtn:disabled{opacity:.4;cursor:not-allowed;background:#fff}
+  .tbtn:disabled:hover{border-color:var(--line);color:var(--txt)}
+  .tbtn .ic{font-size:15px;line-height:1}
+  .tbtn .k{font-family:var(--mono);font-size:9.5px;color:var(--txt-faint);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:2px}
+  .tb-green:hover{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+  .tb-red:hover{border-color:var(--red);background:var(--red-bg);color:var(--red)}
+  .tb-sep{width:1px;align-self:stretch;background:var(--line);margin:2px 4px}
+  .selbar{background:var(--panel);border:1px solid var(--line);border-radius:8px;display:flex;align-items:flex-end;gap:14px;padding:11px 14px;flex-wrap:wrap}
+  .fg{display:flex;flex-direction:column;gap:4px}
+  .fg label{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600}
+  .fg input,.fg select{border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--body);font-size:14px;background:#fff;color:var(--txt)}
+  .fg input:focus,.fg select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(31,95,184,.12)}
+  .fg.grow{flex:1;min-width:260px}
+  .fg.grow select{width:100%;font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+  .panel-bar{background:#f6f8fb;border-bottom:1px solid var(--line);padding:8px 14px;display:flex;align-items:center;gap:10px}
+  .panel-bar h3{font-family:var(--disp);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-dim)}
+  .panel-bar .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .scroll-y{overflow:auto}
+  .detail .scroll-y{max-height:340px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{position:sticky;top:0;background:#eef2f7;text-align:left;font-family:var(--body);font-weight:700;font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--txt-dim);padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:2}
+  tbody td{padding:7px 12px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+  tbody tr:hover{background:#f3f8ff}
+  .num{font-family:var(--mono);text-align:right}
+  .empty{padding:34px;text-align:center;color:var(--txt-faint)}
+  .empty .big{font-size:26px;opacity:.4;margin-bottom:6px}
+  .qpos{color:var(--green);font-weight:600}.qneg{color:var(--red);font-weight:600}
+  .chip{display:inline-block;padding:1px 8px;border-radius:11px;font-size:11px;font-weight:600;font-family:var(--mono);border:1px solid var(--line)}
+  .chip.ent{background:var(--green-bg);color:var(--green);border-color:#bfe6cd}
+  .chip.sai{background:var(--blue-l);color:var(--blue-d);border-color:#bcd5f4}
+  .chip.tam{background:#f1f4f8;color:var(--txt)}
+  .chip.warn{background:var(--amber-bg);color:var(--amber);border-color:#ecd9a3}
+  .chip.desl{background:var(--red-bg);color:var(--red);border-color:#f5c6c2}
+  .cdot{display:inline-block;width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,.2);margin-right:5px;vertical-align:-1px}
+  .icon-btn{background:#fff;border:1px solid var(--line);border-radius:6px;width:27px;height:27px;cursor:pointer;color:var(--txt-dim);font-size:13px;transition:.12s}
+  .icon-btn:hover{border-color:var(--blue);color:var(--blue)}
+  .icon-btn.del:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+  .totals{background:#f6f8fb;border:1px solid var(--line);border-radius:8px;display:flex;flex-wrap:wrap;padding:11px 16px;gap:30px}
+  .tot{display:flex;flex-direction:column}
+  .tot .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600}
+  .tot .v{font-family:var(--mono);font-weight:600;font-size:17px;color:var(--txt);margin-top:2px}
+  .tot .v.blue{color:var(--blue)}.tot .v.green{color:var(--green)}.tot .v.red{color:var(--red)}
+  .btn{border:none;border-radius:7px;padding:9px 18px;font-family:var(--disp);font-weight:700;font-size:13.5px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:.13s;display:inline-flex;align-items:center;gap:7px}
+  .btn.primary{background:var(--blue);color:#fff}.btn.primary:hover{background:var(--blue-d)}
+  .btn.green{background:var(--green);color:#fff}.btn.green:hover{filter:brightness(.93)}
+  .btn.ghost{background:#fff;color:var(--txt-dim);border:1px solid var(--line)}.btn.ghost:hover{border-color:var(--blue);color:var(--blue)}
+  .btn.danger{background:var(--red);color:#fff}.btn.danger:hover{filter:brightness(.95)}
+  .btn.sm{padding:6px 12px;font-size:12px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:#fff}
+  .seg button{background:none;border:none;color:var(--txt-dim);padding:7px 14px;font-family:var(--body);font-weight:600;font-size:12.5px;cursor:pointer}
+  .seg button:not(:last-child){border-right:1px solid var(--line)}
+  .seg button.active{background:var(--blue);color:#fff}
+  .overlay{position:fixed;inset:0;background:rgba(20,30,45,.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .overlay.show{display:flex}
+  .modal{background:var(--panel);border-radius:12px;width:100%;max-width:600px;max-height:92vh;overflow:auto;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+  .modal-head{background:var(--blue);color:#fff;padding:14px 20px;display:flex;align-items:center}
+  .modal-head h3{font-family:var(--disp);font-weight:700;font-size:17px;text-transform:uppercase;letter-spacing:.04em}
+  .modal-head .x{margin-left:auto;background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:17px}
+  .modal-head .x:hover{background:rgba(255,255,255,.35)}
+  .modal-body{padding:20px}
+  .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .mfield{display:flex;flex-direction:column;gap:5px}
+  .mfield.full{grid-column:1/-1}
+  .mfield label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-dim);font-weight:600}
+  .mfield label .req{color:var(--red)}
+  .mfield input,.mfield select,.mfield textarea{border:1px solid var(--line);border-radius:7px;padding:9px 11px;font-family:var(--body);font-size:14px;background:#fff;color:var(--txt);width:100%}
+  .mfield input:focus,.mfield select:focus,.mfield textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(31,95,184,.12)}
+  .mfield input[readonly]{background:#f1f4f8;color:var(--blue);font-family:var(--mono);font-weight:600}
+  .modal-foot{padding:14px 20px;border-top:1px solid var(--line-soft);display:flex;gap:10px;justify-content:flex-end}
+  .alert-line{background:var(--amber-bg);border:1px solid #ecd9a3;border-radius:8px;padding:11px 14px;margin-bottom:14px;font-size:13px;line-height:1.5;color:#7a5a08}
+  .alert-line b{color:var(--amber)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;border-left:3px solid var(--blue)}
+  .stat.green{border-left-color:var(--green)}.stat.red{border-left-color:var(--red)}.stat.amber{border-left-color:var(--amber)}
+  .stat .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-faint);font-weight:600}
+  .stat .v{font-family:var(--disp);font-weight:800;font-size:27px;margin-top:5px}
+  .stat .v small{font-size:13px;color:var(--txt-dim);font-weight:600}
+  .stat .m{font-size:11.5px;color:var(--txt-dim);margin-top:2px}
+  .colab-det{padding:14px 16px;border-bottom:1px solid var(--line-soft)}
+  #toasts{position:fixed;bottom:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:9px}
+  .toast{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);padding:12px 17px;border-radius:8px;min-width:230px;box-shadow:0 8px 26px rgba(0,0,0,.16);font-size:13.5px;font-weight:500;animation:sl .25s}
+  .toast.ok{border-left-color:var(--green)}.toast.erro{border-left-color:var(--red)}.toast.warn{border-left-color:var(--amber)}
+  @keyframes sl{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
+  .loading{padding:50px;text-align:center;color:var(--txt-faint);font-family:var(--mono);letter-spacing:.1em}
+  .colab-select-wrap{padding:14px 16px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .colab-select-wrap select{border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-family:var(--body);font-size:14px;min-width:280px;background:#fff;color:var(--txt)}
+  .colab-select-wrap select:focus{outline:none;border-color:var(--blue)}
+</style>
+</head>
+<body>
+<div class="app" id="app" style="display:none">
+  <header>
+    <div class="logo"><div class="mark">ML</div>
+      <div><h1>Controle de Estoque</h1><div class="u">MERCADO LIVRE · SMG6</div></div></div>
+    <div class="dom-tabs">
+      <button class="dom-tab active" data-dom="safety">Safety</button>
+      <button class="dom-tab" data-dom="insumos">Insumos</button>
+    </div>
+    <div class="head-right">
+      <span id="drive-status" title="Status Google Sheets" style="font-size:11px;display:flex;align-items:center;gap:5px">
+        <span id="drive-dot" style="width:8px;height:8px;border-radius:50%;background:#8b94a3;display:inline-block;transition:.3s"></span>
+        <span id="drive-lbl">Sheets</span>
+      </span>
+      <span id="clock"></span>
+      <span id="save" style="font-size:11px;opacity:.85">—</span>
+      <button onclick="doLogout()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--body)">Sair</button>
+    </div>
+  </header>
+  <div class="menu" id="menu">
+    <button data-view="estoque" class="active">Estoque</button>
+    <button data-view="colaboradores" id="menuColab">Colaboradores</button>
+    <button data-view="desligados" id="menuDesl">Desligados</button>
+    <button data-view="relatorios">Relatórios</button>
+    <div style="flex:1"></div>
+    <button id="menuUsuarios" data-view="usuarios" onclick="viewUsuarios()" style="color:var(--txt-faint);display:none">Usuários</button>
+  </div>
+  <main id="main"><div class="loading">Carregando…</div></main>
+</div>
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div id="toasts"></div>
+
+<script>
+/* ================= CONFIG ================= */
+const SETORES={
+  safety:{
+    "Luvas":{tamanhos:["P","M","G","GG"],cores:[],un:"Par"},
+    "Botas":{tamanhos:Array.from({length:46-33+1},(_,i)=>String(33+i)),cores:[],un:"Par"},
+    "Camisas":{tamanhos:["PP","P","M","G","GG","EX","Especial"],cores:[],un:"UN"},
+    "Calças":{tamanhos:["36","38","40","42","44","46","48","50","52"],cores:[],un:"UN"},
+    "Bermudas":{tamanhos:["36","38","40","42","44","46","48","50","52"],cores:[],un:"UN"},
+    "Coletes":{tamanhos:["P","M","G","GG"],cores:[],un:"UN"},
+    "Toca":{tamanhos:["Único"],cores:[],un:"UN"},
+    "Elástico de cabelo":{tamanhos:["Único"],cores:[],un:"UN"}
+  },
+  insumos:{
+    "Papel Sulfite":{tamanhos:[],cores:["Branco","Verde","Azul","Amarelo","Rosa","Reciclado"],un:"Resma"},
+    "Etiquetas Adesivas":{tamanhos:[],cores:["PS","Branco","Verde","Azul","Rosa","Amarelo"],un:"Rolo"},
+    "Pincel para Quadro":{tamanhos:[],cores:["Preto","Azul","Vermelho","Verde"],un:"UN"},
+    "Ribbon":{tamanhos:[],cores:[],un:"Rolo"},
+    "Removedor de Cola":{tamanhos:[],cores:[],un:"UN"}
+  }
+};
+const COR_HEX={Branco:"#f5f5f5",Verde:"#2faa55",Azul:"#2f6fdb",Amarelo:"#f2c80f",Rosa:"#e85f9c",Reciclado:"#cbb994",Preto:"#222",Vermelho:"#d23b30",PS:"#9aa3b0"};
+const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MESES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const ALERTA_DIAS=15;
+/* ── Google Sheets / Apps Script ── */
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz06z3Q_KpH8giYDEasIIvff6I3aAYCKvDPHLx6fj4dQl3OME8zgbWupCpwSetUMYINaQ/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
+const DRIVE_FOLDER_EPI = "1xIq3muw068guiHAPAEe17NA_pyjUTpPg";
+let   DRIVE_STATUS = "idle";
+
+/* ── API Helper via JSONP ──
+   Domínios Google Workspace bloqueiam fetch cross-origin mesmo com "Qualquer pessoa".
+   JSONP contorna isso injetando uma <script> tag — funciona em qualquer domínio. */
+function api(action, payload, silent) {
+  return new Promise(function(resolve) {
+    const token = sessionStorage.getItem("smg6_token");
+    if (!silent) driveSetStatus("syncing");
+
+    // Nome único para o callback
+    const cbName = "__smg6cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+
+    // Timeout de 20 segundos
+    const timeout = setTimeout(function() {
+      cleanup();
+      if (!silent) driveSetStatus("error");
+      resolve({ ok: false, error: "Tempo esgotado. Verifique a conexão e a URL do Apps Script." });
+    }, 20000);
+
+    function cleanup() {
+      clearTimeout(timeout);
+      delete window[cbName];
+      const el = document.getElementById(cbName);
+      if (el) el.remove();
+    }
+
+    // Registrar callback global que o Apps Script vai chamar
+    window[cbName] = function(data) {
+      cleanup();
+      if (!silent) driveSetStatus(data && data.ok ? "ok" : "error");
+      resolve(data || { ok: false, error: "Resposta vazia do servidor." });
+    };
+
+    // Montar URL com payload + callback
+    const body = { action: action, token: token, payload: payload };
+    const encoded = encodeURIComponent(JSON.stringify(body));
+    const url = APPS_SCRIPT_URL + "?callback=" + cbName + "&payload=" + encoded;
+
+    // Injetar script tag
+    const script = document.createElement("script");
+    script.id = cbName;
+    script.src = url;
+    script.onerror = function() {
+      cleanup();
+      if (!silent) driveSetStatus("error");
+      resolve({ ok: false, error: "Erro ao conectar. Verifique se a implantação está ativa e acessível." });
+    };
+    document.head.appendChild(script);
+  });
+}
+
+/* ── Auth helpers ── */
+function getToken(){ return sessionStorage.getItem("smg6_token"); }
+function getUser(){
+  try{ return JSON.parse(sessionStorage.getItem("smg6_user")||"null"); }catch(e){return null;}
+}
+function setSession(token, user){
+  sessionStorage.setItem("smg6_token", token);
+  sessionStorage.setItem("smg6_user", JSON.stringify(user));
+}
+function clearSession(){
+  sessionStorage.removeItem("smg6_token");
+  sessionStorage.removeItem("smg6_user");
+}
+function canEdit(){ const u=getUser(); return u&&(u.nivel==="admin"||u.nivel==="operador"); }
+function isAdmin(){ const u=getUser(); return u&&u.nivel==="admin"; }
+
+/* Lista de colaboradores da planilha (ativos e desligados) */
+const COLAB_PLANILHA_ATIVOS=[
+  "Adriana Pereira De Souza","Adriano Augusto Ferreira Florentino","Adriano Martins Da Silva",
+  "Abdelllahi Thioub","Alan Santos Oliveira","Alex Oliveira dos Santos","Alica Silva Batista dos Santos",
+  "Alíria Barbosa Soares","Amanda Gonçalves Rodrigues Rabelo","Ana Carla Andrade Moura",
+  "Ana Julia Alves Godoi","Ana Paula Nogueira Garcia","Ana Vitoria Gonzaga Silva Lima",
+  "Andrian Dornelas de Melo","Andrielly Cunha Moreira","Anna Caroline Rodrigues",
+  "Anna Karollyne Amaro da Silva Lopes","Antonia Maria de Rezende Santos",
+  "Antonio Carlos Gonçalves Ferreira","Antonio Emmanuel Louima","Alysson Cruz Leonidio",
+  "Amadou Sall","Amanda Camara Silva","Brithney Eduarda de Jesus Silva","Bruno Ramos da Rocha",
+  "Bruna Stefani Sousa Bernardes Arantes","Bruna Paz Bezzera","Caio Elias Lourenço",
+  "Camilla Ferreira Alves","Carla Gabriely Silva Do Nascimento","Carlos Daniel Souza Alves",
+  "Cassia Aparecida Vieira","Cassiano Galvao Cunha","Claudia Cristina Gonçalves",
+  "Claudiney Do Carmo Neves","Crislane Almeida Da Penha","Daiana Lima","Dalison Ferreira De Oliveira",
+  "Daniel Alves Silva","Danyelle Ramos Silva","Darlan dos Santos Almeida","Davi Julio Ferreira",
+  "Davi Werbert Dos Santos","Deyslen Cristine Pereira Rocha","Diogo Da Silva Souza",
+  "Dionatan Scheffer Morais Neres dos Santos","Eduarda Souza Marques","Eduarda Xavier Moreschi",
+  "Eduardo Henrique Alves Reis","Eduardo Henrique Cândido Lourença","Edvania Ferreira Matos",
+  "Elaine Sebastiana da Silva Muniz","Elciene Martins Da Silva","Eliezenny Del Jesus Salazar",
+  "Elidiane Da Silva Reis Lucena","Elisangela Maria Silva Dos Santos","Elkiane Gusmão Fernandes",
+  "Elsa Lima Ferreira","Erlane Dos Santos","Euripedes Pereira da Silva Neto","Fabio dos Santos Bispo",
+  "Fabio Kawamorita Bastos","Fabrielle Chaves Barbosa","Felipe Aquino de Lima","Felipe De Paula Assis",
+  "Felipe Negreiros Ludgero","Felipe Souza De Aquino","Fernando Abadio Fernandes de Sousa",
+  "Fernando Oliveira da Silva","Flavia Fonseca","Flavio Luiz Junior Do Nascimento Silva",
+  "Francisco Deivd Da Silva","Francisco Diego Dutra Teixeira","Francisco Jose Barbosa",
+  "Gabriel Pereira Matias","Gabrielly Viana Delfino","Gehovanna Luiza da Silva Mendonça",
+  "Gean de Brito Oliveira","Geisa Nazario da Silva","Geovaine Soares de Oliveira Costa",
+  "Geovana Vieira Silva","Geraldo Adriano de Souza","Geraldo Antonio Da Silva",
+  "Giovanna Micaella Monteiro Mendes","Giovanna Sousa Barbosa","Guilherme Moreira Silva",
+  "Gustavo Pereira Castilho Tosta","Heleniria Ernesto Da Silva","Hemily Maria Ferreira Paulino Da Silva",
+  "Hertz Rodolfo Barbosa batista","Iggor Marques Alves","Ingrid Carmo Dias","Ingrid Vieira De Lima",
+  "Israel Carlos Da Conceicao Costa","Ismar Vaz De Souza","Itallo Matheus Rodrigues Mota",
+  "Janaina Vieira Ferreira","Janderson Pereira Da Silva","Jane Kelly Gomes Da Silva",
+  "Jaqueline Rodrigues Gonçalves","Jeanny Karla de Oliveira Borges Barbosa","Jean Lucas Oliveira da Silva",
+  "Jenyfer Barbosa Da Silva Nunes","Jenyfer Lourenco Pereira","Jesse Layne Borges Barbosa",
+  "Jhennifer Lemes Martins","João Batista Da Silva","João Deivid de Souza Amaral",
+  "Jocirene De Oliveira De Souza","Joel Junior Conceicao Dourado","Joelma Braz da Silva Barbosa",
+  "Jose Alison Cardoso Gama","José Augusto da Silva","Joyce Heloisa Gouveia Neves",
+  "Juliana Brandao Silva","Juliana Gomes do Nascimento","Julio Cesar Cabral De Souza",
+  "Júnior Paulino dos Santos","Kalyle dos Anjos Ferreira","Kamyla Aparecida Barbosa Gomes",
+  "Karolina Rigaud Da Silva","Kaua Cavalcante Araujo","Kauan Nunes Carrasco","Kely Cristina Pinheiro",
+  "Kevim José de Carvalho Pimenta","Kezia Gomes Dos Santos","Larissa Cristina dos Santos",
+  "Larissa Cristina Nunes de Oliveira","Larissa Valglessanda Souza","Larita Silva Pessanha Antonio",
+  "Layanne Lara Morais Vilela","Layskele Oliveira Freitas","Leonardo da Cunha Pinto",
+  "Leonardo Guimaraes Martins","Leonardo Wilkner Queiroz Silva","Leticia de Freitas Bernardino",
+  "Lidhyane Cassiano Pereira Dos Santos Valdivino","Lucas De Souza Silva","Lucas Francisco de Sousa",
+  "Lucas Samuel Silva","Lucielma Silva Assuncao","Luciene Nunes Da Silva","Luan Pablo Martins Castro",
+  "Luis Fernando Silva","Luiz Henrique Nunes Martins","Marcelly Martins de Menezes Silva",
+  "Marcelo Vinicius Santana","Marciel Galdino Da Silva","Mariane Moreira Bezerra",
+  "Maria Abadia Pedro","Maria Alice Da Silva","Maria Clara de Oliveira Souza",
+  "Maria Daniele De Sousa Barbosa","Maria Eduarda Lima Silva","Maria Eduarda Rocha Cambuí Matos",
+  "Maria Elys Souza Moura","Maria Fernanda De Oliveira","Maria Silvia Lima Ferreira",
+  "Maria Vitória Oliveira De Souza","Marinalva Gomes Nascimento","Marla Vanessa Sales De Santana",
+  "Marlon Johnattan Da Silva Prado","Mateus Bonifacio Faria","Mateus Vinicius Da Costa Azevedo",
+  "Matheus Felipe Cadene","Matheus Henrique Alves Venancio","Matheus Pereira Batista",
+  "Maykon Fagundes dos Santos","Maykon Pires E Silva","Micaelle Missai Harada Lassi",
+  "Mikaela Costa Pinheiro","Milena Lopes da Silva","Moaby Souza do Nascimento",
+  "Nara Rubia Nascimento","Nathalia Castro Neves","Nicoly Aparecida Campos Magno",
+  "Nicole Dos Santos Alves","Otávio Jordão Oliveira Souza","Pablo Felipe de Souza Nunes",
+  "Pablo Kennedy Almeida Oliveira","Pâmela Maestri Pereira","Pamella Mussi Medeiros Santos",
+  "Paola Silvino Dos Santos","Patricia Pereira Araujo","Paulo Antonio Amancio da silva",
+  "Paulo Sérgio Araújo Dias","Pedro Richard de Souza Bastos","Polyane Maria Alves da Silva",
+  "Priscila da Silva Nascimento","Raiany Pereira dos Santos","Raissa Oliveira Silveira",
+  "Regina Basílio de Oliveira","Renata Freitas Pires da Silva","Ricardo Berger de Oliveira",
+  "Roberto Sergio Ribeiro Da Cunha","Roberio Pereira dos Santos","Ruan Ferreira De Aguiar",
+  "Rubia Domingues Santos","Samuel Da Costa Gomes","Samuel da Silva Goncalves",
+  "Samuel Dantas de Oliveira Filho","Sandro Santos da Silva","Sara Regina de Souza Saraiva",
+  "Saulo de Freitas Borges","Saulo Venas dos Santos","Siziane Helena da Silva Castro",
+  "Sofia Laura Oliveira Silva","Soraia Alves dos Santos","Taina Dos Santos",
+  "Tais Silva De Araujo","Tamile Emanuelle Lima de Souza","Tarcisio Candido Da Silveira Freitas",
+  "Tarcísio Antônio Fontana Filho","Tatila Nunes Gomes","Thaynara Araujo Ferreira",
+  "Thamyres Nunes Balbino","Thiago dos Santos Guimarães","Uenerson dos Santos Costa",
+  "Ulisses Alexandre Costa de Sousa","Valdenia Fernandes da Silva","Veronica Santos Bispo",
+  "Victor Hugo Ferreira Dos Santos","Vinícius Araújo da Silva","Vinicius de Lima Soares e silva",
+  "Walace Da Silva Reis","Wesley Barbosa Alves","Wellington Quirino Do Nascimento Paula",
+  "Wyllyan Samuel Barbosa Santos","Yasmin Alcantara Ribeiro","Yuri Alves de Carvalho da Fonseca",
+  "Zilma De Oliveira Costa","Antony Gabriel de Oliveira Luz","Alexandre Tarcisio Amorim Coelho",
+  "Andreia Dos Santos Silva","Ana Karoline Da Costa Ramos","Roniel Alexandre De Araujo",
+  "Ricardo Lopes Malheiro","Vitor Adriel Rodrigues Mackievicz","Francisco Anderson Carolino",
+  "Jeferson Carvalho Arruda","Edson de Castro de Oliveira","Lucca Joaquim Bernardino Soares",
+  "Marco Aurélio Bessa de Souza","Mateus Guimarães da Silva","Matheus Martins Edreira Abreu",
+  "Thiago Vieira Dos Santos","Davi Dos Santos Vieira","Eduardo Henrique Alves Reis",
+  "Felipe De Paula Assis","Tiago Medeiros Sousa","Teyllon Cristian Da Silva Oliveira"
+];
+const COLAB_PLANILHA_DESLIGADOS=[
+  "Denner Ferreira Souza","Douglas Henrique Silva Souza","Francisco Flávio de Freitas Ferreira Júnior",
+  "Janderson Crispim da Silva","Maikon Wisney Gonçalves da Silva","Priscillane Pereira da Silva",
+  "Wesley Ferreira Costa"
+];
+
+/* ================= HELPERS ================= */
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const today=()=>new Date().toISOString().slice(0,10);
+const brl=n=>(Number(n)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const fmtD=d=>{if(!d)return"—";const[y,m,dd]=String(d).slice(0,10).split("-");return`${dd}/${m}/${y}`;};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const days=(a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
+const val=id=>document.getElementById(id)?.value??"";
+const prodOf=dom=>PRODUTOS.filter(p=>p.dom===dom);
+const movOf=pid=>MOVS.filter(m=>m.produtoId===pid);
+function selProd(){return PRODUTOS.find(p=>p.id===state.sel)||null;}
+function atual(pid){return movOf(pid).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
+function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>(m.tamanho||"")===(tam||"")&&(m.cor||"")===(cor||"")).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
+function custoUnit(pid){const e=movOf(pid).filter(m=>m.tipo==="entrada"&&m.custoUnit>0);return e.length?e[e.length-1].custoUnit:0;}
+function corDot(c){if(!c)return"";return`<span class="cdot" style="background:${COR_HEX[c]||"#bbb"}"></span>`;}
+function colabListaAtivos(dom){
+  const fromMovs=[...new Set(MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom).map(m=>m.parte))].filter(Boolean);
+  const fromPlanilha=dom==="safety"?COLAB_PLANILHA_ATIVOS:[];
+  return [...new Set([...fromPlanilha,...fromMovs])].filter(n=>!DESLIGADOS.includes(n)).sort((a,b)=>a.localeCompare(b,"pt-BR"));
+}
+function mesLabel(ym){const[y,m]=ym.split("-");return MESES[Number(m)-1]+"/"+y;}
+function monthRange(ym){const[y,m]=ym.split("-").map(Number);const last=new Date(y,m,0).getDate();return{start:`${ym}-01`,end:`${ym}-${String(last).padStart(2,"0")}`};}
+function yearRange(y){return{start:`${y}-01-01`,end:`${y}-12-31`};}
+function weekOfYear(dateStr){const d=new Date(dateStr);const start=new Date(d.getFullYear(),0,1);return Math.ceil(((d-start)/86400000+start.getDay()+1)/7);}
+function weeksInYear(y){const allWeeks=[];let d=new Date(y,0,1);while(d.getFullYear()===y){const w=weekOfYear(d.toISOString().slice(0,10));if(!allWeeks.find(x=>x.w===w)){const monday=new Date(d);const sunday=new Date(d);sunday.setDate(sunday.getDate()+(6-sunday.getDay()));if(sunday.getFullYear()>y)sunday.setFullYear(y,11,31);allWeeks.push({w,label:`W${String(w).padStart(2,"0")}`,start:monday.toISOString().slice(0,10),end:sunday.toISOString().slice(0,10)});}d.setDate(d.getDate()+1);}return allWeeks;}
+function aggregate(dom,start,end){const ent=MOVS.filter(m=>m.tipo==="entrada"&&m.dom===dom&&m.data>=start&&m.data<=end);const sai=MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom&&m.data>=start&&m.data<=end);return{ent,sai,qtdEnt:ent.reduce((s,e)=>s+e.qtd,0),qtdSai:sai.reduce((s,e)=>s+e.qtd,0),valEnt:ent.reduce((s,e)=>s+e.qtd*(e.custoUnit||0),0)};}
+
+/* ================= STATE ================= */
+let PRODUTOS=[],MOVS=[],DESLIGADOS=[];
+let state={dom:"safety",view:"estoque",sel:null,colab:null,histColab:null,rep:"semana",repWeek:null,repMonth:"",repYear:0,repStart:"",repEnd:""};
+let _repRange={start:"",end:""};
+
+/* ================= STORAGE (Google Sheets) ================= */
+function mark(){ document.getElementById("save").textContent="✓ salvo "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }
+
+async function persistProd(prod, isNew){
+  const r = await api("saveProduto",{produto:prod,isNew});
+  if(r.ok) mark(); else toast("Erro ao salvar produto: "+r.error,"erro");
+  return r.ok;
+}
+async function persistMov(mov){
+  const r = await api("saveMovimentacao",{mov});
+  if(r.ok) mark(); else toast("Erro ao salvar movimentação: "+r.error,"erro");
+  return r.ok;
+}
+async function persistDesl(nome){
+  const r = await api("saveDesligado",{nome});
+  if(r.ok) mark(); else toast("Erro ao salvar: "+r.error,"erro");
+  return r.ok;
+}
+async function deleteProdApi(id){
+  const r = await api("deleteProduto",{id});
+  if(r.ok) mark(); else toast("Erro ao excluir: "+r.error,"erro");
+  return r.ok;
+}
+async function deleteMovApi(id){
+  const r = await api("deleteMovimentacao",{id});
+  if(r.ok) mark(); else toast("Registro removido.","ok");
+  return r.ok;
+}
+async function updateMovApi(mov){
+  const r = await api("updateMovimentacao",{mov});
+  if(r.ok) mark(); else toast("Erro ao atualizar: "+r.error,"erro");
+  return r.ok;
+}
+/* ================= DRIVE / STATUS ================= */
+function driveSetStatus(s){
+  DRIVE_STATUS=s;
+  var dot=document.getElementById("drive-dot"),lbl=document.getElementById("drive-lbl");
+  if(!dot||!lbl)return;
+  var map={idle:["#8b94a3","Sheets"],syncing:["#f0a500","Salvando…"],ok:["#1f9d55","Sheets ✓"],error:["#d23b30","Sheets ✗"]};
+  var m=map[s]||map.idle;
+  dot.style.background=m[0];lbl.textContent=m[1];
+}
+async function backupManual(){toast("Os dados são salvos automaticamente no Sheets.","ok");}
+
+/* ================= LOGIN ================= */
+function showLogin(){
+  document.getElementById("app").style.display="none";
+  var loginDiv=document.getElementById("login-screen");
+  if(!loginDiv){
+    loginDiv=document.createElement("div");
+    loginDiv.id="login-screen";
+    loginDiv.style.cssText="position:fixed;inset:0;background:linear-gradient(135deg,#0d3a73 0%,#1f5fb8 60%,#2d7dd2 100%);display:flex;align-items:center;justify-content:center;z-index:9999";
+    loginDiv.innerHTML=''
+      +'<div style="background:#fff;border-radius:16px;padding:36px 40px;width:100%;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,.35)">'
+      +'<div style="text-align:center;margin-bottom:28px">'
+      +'<div style="width:56px;height:56px;border-radius:12px;background:#1f5fb8;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;margin:0 auto 12px">ML</div>'
+      +'<div style="font-family:Archivo,sans-serif;font-weight:800;font-size:22px;color:#1d2733">Controle de Estoque</div>'
+      +'<div style="font-size:11px;letter-spacing:.12em;color:#8b94a3;text-transform:uppercase;margin-top:3px">SMG6 · Mercado Livre</div>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:12px">'
+      +'<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#5b6675;font-weight:600;display:block;margin-bottom:5px">E-mail corporativo</label>'
+      +'<input id="li_email" type="email" placeholder="usuario@mercadolivre.com" autocomplete="email" '
+      +'style="width:100%;border:1px solid #d3dae4;border-radius:8px;padding:11px 13px;font-size:14px;font-family:inherit"></div>'
+      +'<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#5b6675;font-weight:600;display:block;margin-bottom:5px">Senha</label>'
+      +'<input id="li_senha" type="password" placeholder="••••••••" autocomplete="current-password" '
+      +'style="width:100%;border:1px solid #d3dae4;border-radius:8px;padding:11px 13px;font-size:14px;font-family:inherit"></div>'
+      +'<div id="li_err" style="color:#d23b30;font-size:12.5px;min-height:16px;text-align:center"></div>'
+      +'<button id="li_btn" onclick="doLogin()" '
+      +'style="background:#1f5fb8;color:#fff;border:none;border-radius:8px;padding:13px;font-weight:700;font-size:15px;font-family:Archivo,sans-serif;letter-spacing:.04em;cursor:pointer;width:100%;text-transform:uppercase">Entrar</button>'
+      +'</div>'
+      +'<div style="text-align:center;margin-top:18px;font-size:11px;color:#8b94a3">Acesso restrito a <b>@mercadolivre.com</b></div>'
+      +'</div>';
+    document.body.appendChild(loginDiv);
+    setTimeout(function(){document.getElementById("li_email").focus();},100);
+    ["li_email","li_senha"].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el)el.addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+    });
+  }else{
+    loginDiv.style.display="flex";
+  }
+}
+
+async function loadAll(){
+  driveSetStatus("syncing");
+  const r = await api("getAll", null, true);
+  if(!r.ok){
+    driveSetStatus("error");
+    toast("Erro ao carregar dados: "+(r.error||"verifique a conexão"),"erro");
+    return false;
+  }
+  PRODUTOS   = r.produtos   || [];
+  MOVS       = r.movs       || [];
+  DESLIGADOS = r.desligados || [];
+  driveSetStatus("ok");
+  return true;
+}
+
+async function doLogin(){
+  var email=(document.getElementById("li_email")||{}).value||"";
+  var senha=(document.getElementById("li_senha")||{}).value||"";
+  var err=document.getElementById("li_err");
+  var btn=document.getElementById("li_btn");
+  if(!email||!senha){if(err)err.textContent="Preencha e-mail e senha.";return;}
+  if(btn){btn.disabled=true;btn.textContent="Entrando…";}
+  if(err)err.textContent="";
+
+  // URL configurada
+
+  const r=await api("login",{email,senha},true);
+  if(btn){btn.disabled=false;btn.textContent="Entrar";}
+  if(!r.ok){if(err)err.textContent=r.error||"Erro ao fazer login.";return;}
+  setSession(r.token,r.user);
+  var ls=document.getElementById("login-screen");
+  if(ls)ls.style.display="none";
+  document.getElementById("app").style.display="";
+  // Atualizar header com usuário logado
+  var saveEl=document.getElementById("save");
+  if(saveEl)saveEl.textContent=r.user.nome||r.user.email;
+  document.getElementById("main").innerHTML='<div class="loading">Carregando dados…</div>';
+  const loadOk = await loadAll();
+  await loadPins();
+  state.view="estoque";
+  state.sel=null;
+  state.colab=null;
+  state.rep="semana";
+  state.repYear=Number(today().slice(0,4));
+  state.repWeek=weekOfYear(today());
+  state.repMonth=today().slice(0,7);
+  state.repStart=today().slice(0,8)+"01";
+  state.repEnd=today();
+  if(window._postLoginHook) window._postLoginHook();
+  render();
+  // Verificar primeiro acesso — solicitar troca de senha
+  if(r.primeiroAcesso){
+    setTimeout(function(){showPrimeiroAcesso();},600);
+  }
+}
+
+function doLogout(){
+  clearSession();
+  PRODUTOS=[];MOVS=[];DESLIGADOS=[];
+  document.getElementById("app").style.display="none";
+  showLogin();
+}
+
+/* ── Gestão de Usuários (Admin) ── */
+function viewUsuarios(){
+  if(!isAdmin()){toast("Acesso restrito a administradores","erro");return;}
+  state.view="usuarios";
+  render();
+}
+
+function viewUsuariosPanel(){
+  var html='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">'
+    +'<button class="btn primary sm" onclick="_uNovo()">＋ Novo Usuário</button>'
+    +'<button class="btn ghost sm" onclick="_uHistorico()">📋 Histórico de Acesso</button>'
+    +'<button class="btn ghost sm" onclick="_uTrocaSenha()">🔑 Alterar Minha Senha</button>'
+    +'</div>'
+    +'<div id="usuarios-list"><div class="loading">Carregando usuários…</div></div>';
+
+  document.getElementById("main").innerHTML='<div class="panel"><div class="panel-bar"><h3>Usuários do Sistema</h3></div>'
+    +'<div style="padding:14px">'+html+'</div></div>';
+
+  api("getUsuarios",null).then(function(r){
+    var el=document.getElementById("usuarios-list");
+    if(!el)return;
+    if(!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r.error)+'</div>';return;}
+    if(!r.data||!r.data.length){el.innerHTML='<div class="empty">Nenhum usuário cadastrado.</div>';return;}
+    var rows=r.data.map(function(u){
+      var chip=u.nivel==="admin"
+        ?'<span class="chip warn">admin</span>'
+        :u.nivel==="operador"
+        ?'<span class="chip sai">operador</span>'
+        :'<span class="chip tam">visualizador</span>';
+      var status=u.ativo
+        ?'<span style="color:var(--green);font-size:16px">●</span>'
+        :'<span style="color:var(--red);font-size:16px">●</span>';
+      var ultimoAcesso=u.ultimoAcesso
+        ?u.ultimoAcesso.replace("T"," ").slice(0,16)
+        :'Nunca';
+      var primAcesso=u.primeiroAcesso
+        ?'<span class="chip warn" title="Ainda não trocou a senha padrão">⚠ Senha padrão</span>'
+        :'';
+      return '<tr>'
+        +'<td>'+status+' <b>'+esc(u.nome||u.email)+'</b>'+primAcesso+'</td>'
+        +'<td style="font-size:12px;color:var(--txt-dim)">'+esc(u.email)+'</td>'
+        +'<td>'+esc(u.contato||'—')+'</td>'
+        +'<td>'+chip+'</td>'
+        +'<td style="font-size:11px;color:var(--txt-dim)">'+ultimoAcesso+'</td>'
+        +'<td class="num" style="display:flex;gap:4px">'
+        +'<button class="btn ghost sm" onclick='_uEditar('+JSON.stringify(u)+')'>✎ Editar</button>'
+        +'<button class="btn danger sm" onclick='_uReset("'+esc(u.email)+'")'>↺ Reset Senha</button>'
+        +'</td></tr>';
+    }).join("");
+    el.innerHTML='<div class="scroll-y" style="max-height:500px"><table>'
+      +'<thead><tr><th>Nome</th><th>Email</th><th>Contato</th><th>Nível</th><th>Último Acesso</th><th></th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table></div>';
+  });
+}
+
+function _uNovo(){
+  _uForm(null);
+}
+function _uEditar(u){
+  _uForm(u);
+}
+function _uForm(u){
+  var isNew=!u;
+  var niveis=["admin","operador","visualizador"];
+  var body='<div class="mgrid">'
+    +'<div class="mfield full"><label>Nome Completo <span class="req">*</span></label>'
+    +'<input id="uf_nome" value="'+(u?esc(u.nome||""):"")+'"></div>'
+    +'<div class="mfield full"><label>E-mail @mercadolivre.com <span class="req">*</span></label>'
+    +'<input id="uf_email" type="email" value="'+(u?esc(u.email):"")+'"></div>'
+    +'<div class="mfield"><label>Contato / Telefone</label>'
+    +'<input id="uf_contato" value="'+(u?esc(u.contato||""):"")+'"></div>'
+    +'<div class="mfield"><label>Nível de Acesso <span class="req">*</span></label>'
+    +'<select id="uf_nivel">'+niveis.map(function(n){return'<option value="'+n+'"'+(u&&u.nivel===n?" selected":"")+'>'+n+'</option>';}).join("")+'</select></div>'
+    +'<div class="mfield"><label>Status</label>'
+    +'<select id="uf_ativo"><option value="true" '+((!u||u.ativo)?"selected":"")+'>Ativo</option>'
+    +'<option value="false" '+(u&&!u.ativo?"selected":"")+'>Inativo</option></select></div>'
+    +(isNew?'<div class="mfield full" style="background:var(--amber-bg);border:1px solid #ecd9a3;border-radius:7px;padding:10px 14px;grid-column:1/-1">'
+    +'<span style="font-size:13px;color:var(--amber)">⚠ Senha inicial padrão: <b>SMG6user2026</b> — o usuário será solicitado a trocar no primeiro acesso.</span></div>':'')
+    +'</div>';
+  openModal((isNew?"Novo":"Editar")+" Usuário",body,[
+    {label:"Cancelar",cls:"ghost",act:function(){closeModal();}},
+    {label:"Salvar",cls:"primary",act:async function(){
+      var nome=(document.getElementById("uf_nome")||{}).value||"";
+      var email=(document.getElementById("uf_email")||{}).value||"";
+      var contato=(document.getElementById("uf_contato")||{}).value||"";
+      var nivel=(document.getElementById("uf_nivel")||{}).value||"operador";
+      var ativo=(document.getElementById("uf_ativo")||{}).value==="true";
+      if(!nome||!email){toast("Nome e e-mail são obrigatórios","erro");return;}
+      var r=await api("saveUsuario",{nome,email,contato,nivel,ativo,senha:isNew?"SMG6user2026":""});
+      if(!r.ok){toast("Erro: "+r.error,"erro");return;}
+      closeModal();toast(isNew?"Usuário criado. Senha padrão: SMG6user2026":"Usuário atualizado.","ok");
+      viewUsuariosPanel();
+    }}
+  ]);
+}
+
+async function _uReset(email){
+  var ok=await confirmModal("Resetar Senha",
+    "Resetar a senha de <b>"+esc(email)+"</b> para <b>SMG6user2026</b>? O usuário precisará trocar no próximo acesso.",
+    "Resetar");
+  if(!ok)return;
+  var r=await api("resetSenha",{email});
+  if(!r.ok){toast("Erro: "+r.error,"erro");return;}
+  toast("Senha resetada para SMG6user2026","ok");
+  viewUsuariosPanel();
+}
+
+function _uHistorico(){
+  if(!isAdmin()){toast("Acesso restrito","erro");return;}
+  var body='<div id="hist-list"><div class="loading">Carregando…</div></div>';
+  openModal("Histórico de Acesso",body,[{label:"Fechar",cls:"ghost",act:closeModal}]);
+  api("getHistoricoAcesso",null).then(function(r){
+    var el=document.getElementById("hist-list");if(!el)return;
+    if(!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r.error)+'</div>';return;}
+    if(!r.data||!r.data.length){el.innerHTML='<div class="empty">Nenhum registro.</div>';return;}
+    var rows=r.data.slice(0,200).map(function(h){
+      return '<tr><td style="font-size:11px;font-family:var(--mono);white-space:nowrap">'+esc(h.ts)+'</td>'
+        +'<td><b>'+esc(h.nome||h.email)+'</b><br><span style="font-size:11px;color:var(--txt-faint)">'+esc(h.email)+'</span></td>'
+        +'<td><span class="chip tam">'+esc(h.acao)+'</span></td>'
+        +'<td style="font-size:12px;color:var(--txt-dim)">'+esc(h.detalhes||"")+'</td></tr>';
+    }).join("");
+    el.innerHTML='<div style="max-height:440px;overflow:auto"><table>'
+      +'<thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table></div>';
+  });
+}
+
+function _uTrocaSenha(){
+  var body='<div class="mgrid">'
+    +'<div class="mfield full"><label>Senha Atual <span class="req">*</span></label>'
+    +'<input type="password" id="ts_atual" placeholder="Senha atual"></div>'
+    +'<div class="mfield full"><label>Nova Senha <span class="req">*</span></label>'
+    +'<input type="password" id="ts_nova" placeholder="Mínimo 6 caracteres"></div>'
+    +'<div class="mfield full"><label>Confirmar Nova Senha <span class="req">*</span></label>'
+    +'<input type="password" id="ts_conf" placeholder="Repita a nova senha"></div>'
+    +'</div>';
+  openModal("Alterar Minha Senha",body,[
+    {label:"Cancelar",cls:"ghost",act:closeModal},
+    {label:"Salvar Nova Senha",cls:"primary",act:async function(){
+      var atual=(document.getElementById("ts_atual")||{}).value||"";
+      var nova=(document.getElementById("ts_nova")||{}).value||"";
+      var conf=(document.getElementById("ts_conf")||{}).value||"";
+      if(!atual||!nova||!conf){toast("Preencha todos os campos","erro");return;}
+      if(nova!==conf){toast("Nova senha e confirmação não coincidem","erro");return;}
+      if(nova.length<6){toast("Nova senha deve ter pelo menos 6 caracteres","erro");return;}
+      var r=await api("trocaSenha",{senhaAtual:atual,novaSenha:nova});
+      if(!r.ok){toast("Erro: "+r.error,"erro");return;}
+      closeModal();toast("Senha alterada com sucesso!","ok");
+    }}
+  ]);
+}
+
+/* Modal de primeiro acesso — solicitar troca de senha */
+function showPrimeiroAcesso(){
+  var body='<div style="text-align:center;padding:8px 0 16px">'
+    +'<div style="font-size:32px;margin-bottom:8px">🔑</div>'
+    +'<div style="font-weight:700;font-size:16px;margin-bottom:6px">Bem-vindo! Crie sua senha</div>'
+    +'<div style="font-size:13px;color:var(--txt-dim)">Este é seu primeiro acesso. Por segurança, crie uma senha pessoal.</div>'
+    +'</div>'
+    +'<div class="mgrid">'
+    +'<div class="mfield full"><label>Nova Senha <span class="req">*</span></label>'
+    +'<input type="password" id="pa_nova" placeholder="Mínimo 6 caracteres"></div>'
+    +'<div class="mfield full"><label>Confirmar Senha <span class="req">*</span></label>'
+    +'<input type="password" id="pa_conf" placeholder="Repita a nova senha"></div>'
+    +'</div>';
+  openModal("Primeiro Acesso — Crie sua Senha",body,[
+    {label:"Salvar e Entrar",cls:"green",act:async function(){
+      var nova=(document.getElementById("pa_nova")||{}).value||"";
+      var conf=(document.getElementById("pa_conf")||{}).value||"";
+      if(!nova||!conf){toast("Preencha os dois campos","erro");return;}
+      if(nova!==conf){toast("As senhas não coincidem","erro");return;}
+      if(nova.length<6){toast("Senha deve ter pelo menos 6 caracteres","erro");return;}
+      var r=await api("trocaSenha",{senhaAtual:"SMG6user2026",novaSenha:nova});
+      if(!r.ok){toast("Erro: "+r.error,"erro");return;}
+      closeModal();toast("Senha criada com sucesso! Bem-vindo.","ok");
+    }}
+  ]);
+  // Impedir fechar sem trocar a senha
+  document.getElementById("overlay").onclick=null;
+}
+
+/* ================= ROUTER ================= */
+function render(){
+  try{
+    document.querySelectorAll(".dom-tab").forEach(b=>b.classList.toggle("active",b.dataset.dom===state.dom));
+    const isInsumos=state.dom==="insumos";
+    const menuColab=document.getElementById("menuColab");
+    const menuDesl=document.getElementById("menuDesl");
+    if(menuColab)menuColab.style.display=isInsumos?"none":"";
+    if(menuDesl)menuDesl.style.display=isInsumos?"none":"";
+    if(isInsumos&&(state.view==="colaboradores"||state.view==="desligados"))state.view="estoque";
+    document.querySelectorAll("#menu button").forEach(b=>b.classList.toggle("active",b.dataset.view===state.view));
+    const m=document.getElementById("main");
+    if(!m)return;
+    let html="";
+    try{
+      if(state.view==="estoque")            html=viewEstoque();
+      else if(state.view==="colaboradores") html=state.colab?viewColabDet():viewColabList();
+      else if(state.view==="desligados")    html=viewDesligados();
+      else if(state.view==="relatorios")    html=viewRel();
+      else if(state.view==="usuarios")      { viewUsuariosPanel(); return; }
+    }catch(viewErr){
+      html='<div style="padding:30px;color:var(--red);font-family:var(--mono);font-size:13px">'
+          +'<b>Erro ao renderizar:</b> '+viewErr.message
+          +'<br><br><button class="btn ghost sm" onclick="render()">Tentar novamente</button></div>';
+      console.error("viewErr:",viewErr);
+    }
+    m.innerHTML=html||'<div class="empty">Sem conteúdo.</div>';
+    wire();
+  }catch(e){
+    console.error("render erro:",e);
+  }
+}
+
+/* ================= ESTOQUE ================= */
+function viewEstoque(){
+  const dom=state.dom;
+  if(!dom){return '<div class="empty">Domínio não definido.</div>';}
+  const prods=(prodOf(dom)||[]).slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
+  const sel=selProd();
+  const showSaida=dom==="insumos";
+  // Mostrar apenas descrição
+  const prodOpts=prods.length
+    ?`<option value="">— Todos os itens —</option>`+prods.map(p=>`<option value="${p.id}" ${state.sel===p.id?"selected":""}>${esc(p.descricao)}</option>`).join("")
+    :`<option value="">Nenhum produto cadastrado</option>`;
+  const hasSel=!!sel;
+
+  let detRows,totals;
+  if(sel){
+    const ms=movOf(sel.id).slice().sort((a,b)=>b.data>a.data?1:(b.data<a.data?-1:((b._t||0)-(a._t||0))));
+    detRows=ms.length?ms.map(mv=>`<tr>
+      <td class="num">${fmtD(mv.data)}</td>
+      <td>${mv.tipo==="entrada"?`<span class="chip ent">Entrada</span>`:`<span class="chip sai">Saída</span>`}</td>
+      <td><b>${esc(mv.parte||"")}</b>${mv.tipo==="saida"&&mv.liberadoPor?`<br><span style="font-size:11px;color:var(--txt-faint)">lib: ${esc(mv.liberadoPor)}</span>`:""}</td>
+      <td>${mv.tamanho?`<span class="chip tam">${esc(mv.tamanho)}</span>`:"—"}</td>
+      <td>${mv.cor?corDot(mv.cor)+esc(mv.cor):"—"}</td>
+      <td class="num ${mv.tipo==='entrada'?'qpos':'qneg'}">${mv.tipo==="entrada"?"+":"−"}${mv.qtd}</td>
+      <td class="num">${mv.custoUnit?brl(mv.custoUnit):"—"}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(mv.obs||"")}</td>
+      <td class="num" style="display:flex;gap:4px;justify-content:flex-end">
+        ${mv.tipo==="entrada"?`<button class="icon-btn" data-editmov="${mv.id}" title="Editar entrada">✎</button>`:""}
+        <button class="icon-btn del" data-delmov="${mv.id}" title="Excluir">🗑</button>
+      </td>
+    </tr>`).join(""):`<tr><td colspan="9"><div class="empty">Sem movimentações. Use <b>Entrada (F5)</b>.</div></td></tr>`;
+    const at=atual(sel.id),cu=custoUnit(sel.id);
+    totals=`<div class="totals">
+      <div class="tot"><span class="l">Produto</span><span class="v">${esc(sel.descricao)}</span></div>
+      <div class="tot"><span class="l">Quantidade Total</span><span class="v ${at<=0?'red':''}">${at}</span></div>
+      <div class="tot"><span class="l">Disponível</span><span class="v green">${at}</span></div>
+      <div class="tot"><span class="l">Custo Total do Estoque</span><span class="v blue">${brl(at*cu)}</span></div>
+      <div class="tot"><span class="l">Custo Atual da Unidade</span><span class="v">${brl(cu)}</span></div></div>`;
+  }else{
+    // Mostrar todos itens com saldo
+    const todosProd=prods.map(p=>({p,saldo:atual(p.id)}));
+    const resumoRows=todosProd.map(({p,saldo})=>{
+      const cu=custoUnit(p.id);
+      return `<tr>
+        <td><b>${esc(p.descricao)}</b></td>
+        <td>${esc(p.setor||"")}</td>
+        <td class="num ${saldo<=0?'qneg':'qpos'}">${saldo}</td>
+        <td class="num">${brl(cu)}</td>
+        <td class="num">${brl(saldo*cu)}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="5"><div class="empty">Nenhum produto cadastrado.</div></td></tr>`;
+    detRows=resumoRows;
+    totals=`<div class="totals">
+      <div class="tot"><span class="l">Total de Produtos</span><span class="v">${prods.length}</span></div>
+      <div class="tot"><span class="l">Itens em Estoque</span><span class="v green">${todosProd.reduce((s,x)=>s+(x.saldo>0?x.saldo:0),0)}</span></div>
+      <div class="tot"><span class="l">Valor Total Estimado</span><span class="v blue">${brl(todosProd.reduce((s,{p,saldo})=>s+saldo*custoUnit(p.id),0))}</span></div></div>`;
+  }
+
+  const tableHeader=sel
+    ?`<thead><tr><th>Data</th><th>Tipo</th><th>${dom==="safety"?"Colaborador / Fornecedor":"Destino / Fornecedor"}</th><th>Tamanho</th><th>Cor</th><th class="num">Qtde.</th><th class="num">Custo</th><th>Observações</th><th></th></tr></thead>`
+    :`<thead><tr><th>Produto</th><th>Tipo/Modelo</th><th class="num">Saldo</th><th class="num">Custo Unit.</th><th class="num">Valor Total</th></tr></thead>`;
+
+  // Toolbar de produto: só no contexto do produto selecionado (lista suspensa de Safety/Insumos)
+  const prodToolbar=`
+  <div class="toolbar">
+    <button class="tbtn" data-act="novoProd"><span class="ic">➕</span> Cadastrar Produto</button>
+    <button class="tbtn" data-act="editProd" ${hasSel?"":"disabled"}><span class="ic">✎</span> Alterar Produto</button>
+    <button class="tbtn tb-red" data-act="delProd" ${hasSel?"":"disabled"}><span class="ic">✖</span> Excluir Produto</button>
+    <span class="tb-sep"></span>
+    <button class="tbtn" onclick="backupManual()" title="Backup agora no Google Drive"><span class="ic">&#9729;</span> Backup Drive</button>
+    <a href="https://drive.google.com/drive/folders/1XxVvU6fE2ozesThx5-pIT0qCOe3AyYj8" target="_blank" class="tbtn" style="text-decoration:none" title="Abrir pasta no Drive"><span class="ic">&#128194;</span> Abrir Drive</a>
+  </div>`;
+
+  return `
+  ${prodToolbar}
+  <div class="selbar">
+    <div class="fg grow"><label>Produto · ${dom==="safety"?"Safety":"Insumos"}</label>
+      <select id="prodSel">${prodOpts}</select></div>
+  </div>
+  <div class="toolbar">
+    <button class="tbtn tb-green" data-act="entrada" ${hasSel?"":"disabled"}><span class="ic">↓</span> Entrada no Estoque <span class="k">F5</span></button>
+    ${showSaida?`<button class="tbtn" data-act="saida" ${hasSel?"":"disabled"}><span class="ic">↑</span> Saída do Estoque <span class="k">F6</span></button>`:`<span style="font-size:12px;color:var(--txt-faint)">As entregas de EPI são feitas na aba <b style="color:var(--blue)">Colaboradores</b>.</span>`}
+  </div>
+  <div class="panel detail">
+    <div class="panel-bar"><h3>${sel?"Movimentações":"Resumo de Estoque"}</h3>${hasSel?`<div class="right"><span style="font-size:12px;color:var(--txt-faint)">${esc(sel.descricao)}</span></div>`:""}</div>
+    <div class="scroll-y"><table>${tableHeader}<tbody>${detRows}</tbody></table></div>
+  </div>
+  ${totals}`;
+}
+
+/* ================= COLABORADORES ================= */
+function viewColabList(){
+  const dom=state.dom;
+  const btn=dom==="safety"?`<button class="btn primary sm" data-act="novaEntrega">＋ Nova Entrega de EPI</button>`:"";
+  const ativos=colabListaAtivos(dom);
+
+  // Stats movimentações por colaborador
+  const statsMap={};
+  MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom).forEach(m=>{
+    const k=m.parte;if(!k)return;
+    if(!statsMap[k])statsMap[k]={itens:0,reg:0,ultima:null};
+    statsMap[k].itens+=m.qtd;statsMap[k].reg++;
+    if(!statsMap[k].ultima||m.data>statsMap[k].ultima)statsMap[k].ultima=m.data;
+  });
+
+  const colabSel=state.colab||"";
+  const selectHtml=`<div class="colab-select-wrap">
+    <label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600">Colaborador</label>
+    <select id="colabDropdown">
+      <option value="">— Selecione um colaborador —</option>
+      ${ativos.map(n=>`<option value="${esc(n)}" ${colabSel===n?"selected":""}>${esc(n)}</option>`).join("")}
+    </select>
+  </div>`;
+
+  if(colabSel && ativos.includes(colabSel)){
+    const stats=statsMap[colabSel]||{itens:0,reg:0,ultima:null};
+    const reg=MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom&&m.parte===colabSel).sort((a,b)=>b.data>a.data?1:-1);
+    const total=reg.reduce((s,r)=>s+r.qtd,0);
+    const porProd={};
+    reg.forEach(r=>{const p=PRODUTOS.find(x=>x.id===r.produtoId);const n=p?p.descricao:r.produtoId;porProd[n]=(porProd[n]||0)+r.qtd;});
+    const rows=reg.map(r=>{
+      const p=PRODUTOS.find(x=>x.id===r.produtoId);
+      const ant=reg.filter(x=>x.produtoId===r.produtoId&&x.data<r.data).sort((a,b)=>b.data>a.data?1:-1)[0];
+      const d=ant?days(ant.data,r.data):null;
+      const flag=(d!==null&&d<ALERTA_DIAS)?`<span class="chip warn" title="Intervalo de ${d} dias">⚠ ${d}d</span>`:"";
+      var reciboBtn=r.temRecibo?'<button class="icon-btn" title="Ver Comprovante de Entrega" onclick="reemitirRecibo(\''+r.id+'\')">&#128196;</button>':'';
+      return '<tr><td class="num">'+fmtD(r.data)+'</td><td><b>'+esc(p?p.descricao:"?")+'</b></td>'
+        +'<td>'+(r.tamanho?'<span class="chip tam">'+esc(r.tamanho)+'</span>':(r.cor?corDot(r.cor)+esc(r.cor):"—"))+'</td>'
+        +'<td class="num">'+r.qtd+'</td><td>'+esc(r.liberadoPor||"")+' '+flag+'</td>'
+        +'<td class="num" style="display:flex;gap:4px;justify-content:flex-end">'+reciboBtn+'<button class="icon-btn del" title="Excluir" data-delmov="'+r.id+'">&#128465;</button></td></tr>';
+    }).join("");
+    const chips=Object.entries(porProd).sort((a,b)=>b[1]-a[1]).map(([p,q])=>`<span class="chip tam" style="margin:3px">${esc(p)}: <b>${q}</b></span>`).join("");
+    const btnDesl=dom==="safety"?`<button class="btn danger sm" onclick="desligarColab('${esc(colabSel)}')">⚠ Desligar Colaborador</button>`:"";
+    return `<div class="panel">
+      <div class="panel-bar"><h3>Colaboradores · ${dom==="safety"?"Safety":"Insumos"}</h3><div class="right">${btn}</div></div>
+      ${selectHtml}
+      <div class="colab-det">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-family:var(--disp);font-weight:800;font-size:20px">${esc(colabSel)}</div>
+            <div style="font-size:12px;color:var(--txt-dim);margin-top:3px"><b>${reg.length}</b> ${dom==="safety"?"entregas":"retiradas"} · <b>${total}</b> itens · última: <b>${fmtD(stats.ultima)}</b></div>
+          </div>
+          ${btnDesl}
+        </div>
+        <div style="margin-top:10px">${chips||`<span style="color:var(--txt-faint)">Sem registros</span>`}</div>
+      </div>
+      <div class="scroll-y" style="max-height:380px"><table>
+        <thead><tr><th>Data</th><th>Produto</th><th>Tam./Cor</th><th class="num">Qtd</th><th>Liberado por</th><th></th></tr></thead>
+        <tbody>${rows||`<tr><td colspan="6"><div class="empty">Sem registros.</div></td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  // Sem colaborador selecionado
+  return `<div class="panel">
+    <div class="panel-bar"><h3>Colaboradores · ${dom==="safety"?"Safety":"Insumos"}</h3><div class="right">${btn}</div></div>
+    ${selectHtml}
+    <div class="empty"><div class="big">☻</div>Selecione um colaborador para ver o relatório.</div>
+  </div>`;
+}
+
+function viewColabDet(){return viewColabList();}
+
+/* ================= DESLIGADOS ================= */
+function viewDesligados(){
+  const todos=[...new Set([...COLAB_PLANILHA_DESLIGADOS,...DESLIGADOS])].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  const histSel=state.histColab||"";
+
+  if(histSel && todos.includes(histSel)){
+    const reg=MOVS.filter(m=>m.tipo==="saida"&&m.parte===histSel).sort((a,b)=>b.data>a.data?1:-1);
+    const total=reg.reduce((s,r)=>s+r.qtd,0);
+    const porProd={};
+    reg.forEach(r=>{const p=PRODUTOS.find(x=>x.id===r.produtoId);const n=p?p.descricao:r.produtoId;porProd[n]=(porProd[n]||0)+r.qtd;});
+    const chips=Object.entries(porProd).sort((a,b)=>b[1]-a[1]).map(([p,q])=>`<span class="chip tam" style="margin:3px">${esc(p)}: <b>${q}</b></span>`).join("");
+    const rows=reg.map(r=>{
+      const p=PRODUTOS.find(x=>x.id===r.produtoId);
+      return `<tr><td class="num">${fmtD(r.data)}</td><td><b>${esc(p?p.descricao:"?")}</b></td>
+        <td>${r.tamanho?`<span class="chip tam">${esc(r.tamanho)}</span>`:r.cor?corDot(r.cor)+esc(r.cor):"—"}</td>
+        <td class="num">${r.qtd}</td><td>${esc(r.liberadoPor||"")}</td></tr>`;
+    }).join("");
+    return `<div class="panel">
+      <div class="panel-bar">
+        <button class="btn ghost sm" onclick="state.histColab=null;render()">← Voltar</button>
+        <h3 style="margin-left:8px">Histórico · ${esc(histSel)}</h3>
+        <div class="right"><span class="chip desl">Desligado</span></div></div>
+      <div class="colab-det">
+        <div style="font-family:var(--disp);font-weight:800;font-size:20px">${esc(histSel)}</div>
+        <div style="font-size:12px;color:var(--txt-dim);margin-top:3px"><b>${reg.length}</b> entregas · <b>${total}</b> itens</div>
+        <div style="margin-top:10px">${chips||`<span style="color:var(--txt-faint)">Sem registros</span>`}</div>
+      </div>
+      <div class="scroll-y" style="max-height:420px"><table>
+        <thead><tr><th>Data</th><th>Produto</th><th>Tam./Cor</th><th class="num">Qtd</th><th>Liberado por</th></tr></thead>
+        <tbody>${rows||`<tr><td colspan="5"><div class="empty">Nenhuma entrega registrada.</div></td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  const rows=todos.map(n=>`<tr>
+    <td><b>${esc(n)}</b></td>
+    <td><span class="chip desl">Desligado</span></td>
+    <td class="num">${MOVS.filter(m=>m.tipo==="saida"&&m.parte===n).length}</td>
+    <td><button class="btn ghost sm" onclick="state.histColab='${esc(n)}';render()">📋 Histórico</button></td>
+  </tr>`).join("") || `<tr><td colspan="4"><div class="empty">Nenhum desligado registrado.</div></td></tr>`;
+  return `<div class="panel">
+    <div class="panel-bar"><h3>Colaboradores Desligados</h3></div>
+    <div class="scroll-y"><table>
+      <thead><tr><th>Nome</th><th>Status</th><th class="num">Registros</th><th>Ação</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+}
+
+async function desligarColab(nome){
+  const ok=await confirmModal("Desligar Colaborador",`Mover <b>${esc(nome)}</b> para a lista de desligados? O histórico será preservado.`,"Desligar");
+  if(!ok)return;
+  if(!DESLIGADOS.includes(nome)){DESLIGADOS.push(nome);}
+  await persistDesl(nome);
+  state.colab=null;
+  toast(`${nome} movido para Desligados.`,"warn");render();
+}
+
+/* ================= RELATÓRIOS ================= */
+function viewRel(){
+  const dom=state.dom;
+  const todayStr=today();
+  const curYear=Number(todayStr.slice(0,4));
+  if(!state.repYear)state.repYear=curYear;
+  if(!state.repMonth)state.repMonth=todayStr.slice(0,7);
+
+  let start,end,breakdown="",periodoLbl="",weekOptions="";
+
+  if(state.rep==="semana"){
+    // Semanas do ano
+    const wks=weeksInYear(state.repYear);
+    // Semana corrente default
+    const curW=weekOfYear(todayStr);
+    const selW=state.repWeek||curW;
+    const wkObj=wks.find(w=>w.w===selW)||wks[wks.length-1];
+    start=wkObj.start;end=wkObj.end;
+    periodoLbl=`${wkObj.label} — ${fmtD(wkObj.start)} a ${fmtD(wkObj.end)}`;
+    weekOptions=`<div class="fg"><label>Ano</label><input type="number" id="rep_year" value="${state.repYear}" min="2020" max="2100" style="width:100px"></div>
+      <div class="fg"><label>Semana</label><select id="rep_week">${wks.map(w=>`<option value="${w.w}" ${w.w===selW?"selected":""}>${w.label} · ${fmtD(w.start)} a ${fmtD(w.end)}</option>`).join("")}</select></div>`;
+
+    const {ent:entW,sai:saiW}=aggregate(dom,start,end);
+    // Movimentação por item na semana
+    const movItemW={};
+    prodOf(dom).forEach(p=>{
+      const eQtd=entW.filter(m=>m.produtoId===p.id).reduce((s,m)=>s+m.qtd,0);
+      const sQtd=saiW.filter(m=>m.produtoId===p.id).reduce((s,m)=>s+m.qtd,0);
+      if(eQtd||sQtd)movItemW[p.descricao]={ent:eQtd,sai:sQtd};
+    });
+    const movItemRowsW=Object.entries(movItemW).sort((a,b)=>a[0].localeCompare(b[0],"pt-BR"))
+      .map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num qpos">${v.ent?"+"+v.ent:"—"}</td><td class="num qneg">${v.sai?"−"+v.sai:"—"}</td></tr>`).join("")
+      || `<tr><td colspan="3"><div class="empty">Sem movimentações.</div></td></tr>`;
+    // Itens com saídas na semana
+    const porItemW={};
+    saiW.forEach(s=>{const p=PRODUTOS.find(x=>x.id===s.produtoId);const k=p?p.descricao:"?";porItemW[k]=(porItemW[k]||0)+s.qtd;});
+    const itemRowsW=Object.entries(porItemW).sort((a,b)=>b[1]-a[1]).map(([k,q],i)=>`<tr><td><span style="font-size:11px;color:var(--txt-faint);margin-right:6px">${i+1}°</span>${esc(k)}</td><td class="num"><b>${q}</b></td></tr>`).join("") || `<tr><td colspan="2"><div class="empty">Sem saídas.</div></td></tr>`;
+    // Colaboradores ofensores (mais de 1 item igual) — só Safety
+    let ofBlock="";
+    if(dom==="safety"){
+      const colabOfW={};
+      saiW.forEach(s=>{
+        const p=PRODUTOS.find(x=>x.id===s.produtoId);const item=p?p.descricao:"?";
+        if(!colabOfW[s.parte])colabOfW[s.parte]={};
+        colabOfW[s.parte][item]=(colabOfW[s.parte][item]||0)+s.qtd;
+      });
+      const ofensores=[];
+      Object.entries(colabOfW).forEach(([c,map])=>{Object.entries(map).forEach(([item,qtd])=>{if(qtd>1)ofensores.push({c,item,qtd});});});
+      ofensores.sort((a,b)=>b.qtd-a.qtd);
+      const ofRows=ofensores.map(o=>`<tr><td><b>${esc(o.c)}</b></td><td>${esc(o.item)}</td><td class="num qneg">${o.qtd}×</td></tr>`).join("") || `<tr><td colspan="3"><div class="empty">Nenhum ofensor.</div></td></tr>`;
+      ofBlock=`<div class="panel"><div class="panel-bar"><h3>Ofensores — +1 item igual</h3></div>
+        <div class="scroll-y" style="max-height:300px"><table><thead><tr><th>Colaborador</th><th>Item</th><th class="num">Qtd</th></tr></thead><tbody>${ofRows}</tbody></table></div></div>`;
+    }
+
+    breakdown=`
+    <div class="panel"><div class="panel-bar"><h3>Movimentação por Item — ${wkObj.label}</h3></div>
+      <div class="scroll-y" style="max-height:300px"><table>
+        <thead><tr><th>Produto</th><th class="num">Entradas</th><th class="num">Saídas</th></tr></thead>
+        <tbody>${movItemRowsW}</tbody>
+      </table></div></div>
+    <div style="display:grid;grid-template-columns:1fr${dom==="safety"?" 1fr":""};gap:12px">
+      <div class="panel"><div class="panel-bar"><h3>Itens com Saídas — ${wkObj.label}</h3></div>
+        <div class="scroll-y" style="max-height:280px"><table><thead><tr><th>Produto</th><th class="num">Qtd</th></tr></thead><tbody>${itemRowsW}</tbody></table></div></div>
+      ${ofBlock}
+    </div>`;
+
+  }else if(state.rep==="mes"){
+    const r=monthRange(state.repMonth);start=r.start;end=r.end;
+    periodoLbl=`${MESES_FULL[Number(state.repMonth.split("-")[1])-1]} / ${state.repMonth.split("-")[0]}`;
+    weekOptions=`<div class="fg"><label>Mês</label><input type="month" id="rep_month" value="${state.repMonth}"></div>`;
+
+    const {ent:entM,sai:saiM}=aggregate(dom,start,end);
+    // Movimentação por item no mês
+    const movItemM={};
+    prodOf(dom).forEach(p=>{
+      const eQtd=entM.filter(m=>m.produtoId===p.id).reduce((s,m)=>s+m.qtd,0);
+      const sQtd=saiM.filter(m=>m.produtoId===p.id).reduce((s,m)=>s+m.qtd,0);
+      if(eQtd||sQtd)movItemM[p.descricao]={ent:eQtd,sai:sQtd};
+    });
+    const movItemRowsM=Object.entries(movItemM).sort((a,b)=>a[0].localeCompare(b[0],"pt-BR"))
+      .map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num qpos">${v.ent?"+"+v.ent:"—"}</td><td class="num qneg">${v.sai?"−"+v.sai:"—"}</td></tr>`).join("")
+      || `<tr><td colspan="3"><div class="empty">Sem movimentações.</div></td></tr>`;
+    const porItemM={};
+    saiM.forEach(s=>{const p=PRODUTOS.find(x=>x.id===s.produtoId);const k=p?p.descricao:"?";porItemM[k]=(porItemM[k]||0)+s.qtd;});
+    const top10Items=Object.entries(porItemM).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const itemRowsM=top10Items.map(([k,q],i)=>`<tr><td><span style="font-size:11px;color:var(--txt-faint);margin-right:6px">${i+1}°</span>${esc(k)}</td><td class="num"><b>${q}</b></td></tr>`).join("") || `<tr><td colspan="2"><div class="empty">Sem saídas.</div></td></tr>`;
+
+    const porColabM={};
+    saiM.forEach(s=>{if(s.parte)porColabM[s.parte]=(porColabM[s.parte]||0)+s.qtd;});
+    const top10Colab=Object.entries(porColabM).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const colabRowsM=top10Colab.map(([k,q],i)=>`<tr><td><span style="font-size:11px;color:var(--txt-faint);margin-right:6px">${i+1}°</span><b>${esc(k)}</b></td><td class="num">${q}</td></tr>`).join("") || `<tr><td colspan="2"><div class="empty">Sem dados.</div></td></tr>`;
+
+    const colabBlockM=dom==="safety"?`<div class="panel"><div class="panel-bar"><h3>Top 10 — Mais Retiradas por Colaborador</h3></div>
+        <div class="scroll-y" style="max-height:340px"><table><thead><tr><th>Colaborador</th><th class="num">Itens</th></tr></thead><tbody>${colabRowsM}</tbody></table></div></div>`:"";
+
+    breakdown=`
+    <div class="panel"><div class="panel-bar"><h3>Movimentação por Item — ${periodoLbl}</h3></div>
+      <div class="scroll-y" style="max-height:300px"><table>
+        <thead><tr><th>Produto</th><th class="num">Entradas</th><th class="num">Saídas</th></tr></thead>
+        <tbody>${movItemRowsM}</tbody>
+      </table></div></div>
+    <div style="display:grid;grid-template-columns:1fr${dom==="safety"?" 1fr":""};gap:12px">
+      <div class="panel"><div class="panel-bar"><h3>Top 10 — Itens Mais Retirados</h3></div>
+        <div class="scroll-y" style="max-height:340px"><table><thead><tr><th>Produto</th><th class="num">Qtd</th></tr></thead><tbody>${itemRowsM}</tbody></table></div></div>
+      ${colabBlockM}
+    </div>`;
+
+  }else if(state.rep==="ano"){
+    const r=yearRange(state.repYear);start=r.start;end=r.end;
+    periodoLbl=`Ano ${state.repYear}`;
+    weekOptions=`<div class="fg"><label>Ano</label><input type="number" id="rep_year" value="${state.repYear}" min="2020" max="2100" style="width:100px"></div>`;
+
+    // Por item: entradas, saídas e saldo final
+    const prodsDom=prodOf(dom);
+    const itemAnoRows=prodsDom.map(p=>{
+      const entAno=MOVS.filter(m=>m.tipo==="entrada"&&m.produtoId===p.id&&m.data>=start&&m.data<=end).reduce((s,m)=>s+m.qtd,0);
+      const saiAno=MOVS.filter(m=>m.tipo==="saida"&&m.produtoId===p.id&&m.data>=start&&m.data<=end).reduce((s,m)=>s+m.qtd,0);
+      const saldoFinal=atual(p.id);
+      return `<tr>
+        <td><b>${esc(p.descricao)}</b></td>
+        <td class="num qpos">+${entAno}</td>
+        <td class="num qneg">−${saiAno}</td>
+        <td class="num" style="font-weight:600;${saldoFinal<=0?"color:var(--red)":"color:var(--green)"}">${saldoFinal}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="4"><div class="empty">Sem produtos.</div></td></tr>`;
+
+    breakdown=`<div class="panel"><div class="panel-bar"><h3>Movimentação Anual por Item — ${state.repYear}</h3></div>
+      <div class="scroll-y" style="max-height:480px"><table>
+        <thead><tr><th>Produto</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Saldo Final</th></tr></thead>
+        <tbody>${itemAnoRows}</tbody>
+      </table></div></div>`;
+
+  }else{
+    start=state.repStart||today().slice(0,8)+"01";end=state.repEnd||today();
+    periodoLbl="Período personalizado";
+    weekOptions=`<div class="fg"><label>De</label><input type="date" id="rep_start" value="${start}"></div><div class="fg"><label>Até</label><input type="date" id="rep_end" value="${end}"></div>`;
+  }
+  _repRange={start,end};
+
+  const {ent,sai,valEnt,qtdSai}=aggregate(dom,start,end);
+  const porColab={};sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
+
+  return `
+  <div class="selbar">
+    <div class="fg"><label>Tipo de relatório</label>
+      <div class="seg" id="repSeg">${[["semana","Semanal"],["mes","Mensal"],["ano","Anual"],["periodo","Período"]].map(([p,l])=>`<button data-p="${p}" class="${state.rep===p?"active":""}">${l}</button>`).join("")}</div></div>
+    ${weekOptions}
+    <button class="btn ghost sm" data-act="csv" style="margin-bottom:2px">⤓ CSV</button><button class="btn ghost sm" onclick="backupManual()" style="margin-bottom:2px" title="Backup agora no Google Drive">&#9729; Drive</button><a href="https://drive.google.com/drive/folders/1XxVvU6fE2ozesThx5-pIT0qCOe3AyYj8" target="_blank" class="btn ghost sm" style="margin-bottom:2px;text-decoration:none">&#128194; Abrir Pasta</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="l">${periodoLbl}</div><div class="v" style="font-size:15px">${fmtD(start)} → ${fmtD(end)}</div></div>
+    <div class="stat green"><div class="l">Entradas</div><div class="v">${ent.length}<small> lanç.</small></div><div class="m">${brl(valEnt)} em compras</div></div>
+    <div class="stat"><div class="l">Saídas</div><div class="v">${sai.length}<small> regs.</small></div><div class="m">${qtdSai} itens</div></div>
+    <div class="stat amber"><div class="l">Colaboradores</div><div class="v">${Object.keys(porColab).length}</div><div class="m">atendidos</div></div>
+  </div>
+  ${breakdown}`;
+}
+
+/* ================= WIRE ================= */
+function wire(){
+  document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>act(b.dataset.act));
+  if(state.view==="estoque"){
+    const ps=document.getElementById("prodSel");if(ps)ps.onchange=()=>{state.sel=ps.value||null;render();};
+    document.querySelectorAll("[data-delmov]").forEach(b=>b.onclick=()=>delMov(b.dataset.delmov));
+    document.querySelectorAll("[data-editmov]").forEach(b=>b.onclick=()=>editMov(b.dataset.editmov));
+  }
+  if(state.view==="colaboradores"){
+    const cd=document.getElementById("colabDropdown");
+    if(cd)cd.onchange=()=>{state.colab=cd.value||null;render();};
+    document.querySelectorAll("[data-delmov]").forEach(b=>b.onclick=()=>delMov(b.dataset.delmov));
+  }
+  if(state.view==="relatorios"){
+    document.querySelectorAll("#repSeg button").forEach(b=>b.onclick=()=>{state.rep=b.dataset.p;render();});
+    const rm=document.getElementById("rep_month");if(rm)rm.onchange=()=>{state.repMonth=rm.value;render();};
+    const ry=document.getElementById("rep_year");if(ry)ry.onchange=()=>{state.repYear=Number(ry.value);render();};
+    const rw=document.getElementById("rep_week");if(rw)rw.onchange=()=>{state.repWeek=Number(rw.value);render();};
+    const rs=document.getElementById("rep_start");if(rs)rs.onchange=()=>{state.repStart=rs.value;render();};
+    const re=document.getElementById("rep_end");if(re)re.onchange=()=>{state.repEnd=re.value;render();};
+  }
+}
+
+/* ================= ACTIONS ================= */
+function act(a){
+  if(a==="novoProd")formProduto(null);
+  else if(a==="editProd"&&selProd())formProduto(selProd());
+  else if(a==="delProd")delProduto();
+  else if(a==="entrada"&&selProd())formMov("entrada");
+  else if(a==="saida"&&selProd())formMov("saida");
+  else if(a==="novaEntrega")formEntrega("");
+  else if(a==="csv")exportCSV();
+}
+
+/* ---- Produto ---- */
+function formProduto(prod){
+  const dom=state.dom,isNew=!prod;
+  // Safety: sem setor, apenas descrição, unidade, tamanhos, cores
+  if(dom==="safety"){
+    const cur=prod||{descricao:"",unidade:"UN",tamanhos:[],cores:[]};
+    openModal((isNew?"Cadastrar":"Alterar")+" Produto · Safety",`
+      <div class="mgrid">
+        <div class="mfield full"><label>Descrição (Nome) <span class="req">*</span></label><input id="p_desc" value="${esc(cur.descricao)}" placeholder="Nome do produto/EPI"></div>
+        <div class="mfield"><label>Unidade</label><input id="p_un" value="${esc(cur.unidade||"UN")}"></div>
+        <div class="mfield full"><label>Tamanhos (separe por vírgula)</label><input id="p_tam" value="${esc((cur.tamanhos||[]).join(", "))}" placeholder="Ex: P, M, G, GG"></div>
+        <div class="mfield full"><label>Tipo/Modelo (Cores)</label><input id="p_cor" value="${esc((cur.cores||[]).join(", "))}" placeholder="Ex: Nitrílica, Látex"></div>
+      </div>`,
+      [{label:"Cancelar",cls:"ghost",act:closeModal},
+       {label:"Salvar",cls:"primary",act:async()=>{
+         const desc=val("p_desc").trim();if(!desc){toast("Informe a descrição","erro");return;}
+         const obj={dom,setor:"Safety",classificacao:"Safety",descricao:desc,unidade:val("p_un").trim()||"UN",codRef:"",
+           tamanhos:val("p_tam").split(",").map(s=>s.trim()).filter(Boolean),
+           cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
+         if(isNew){obj.id=uid();PRODUTOS.push(obj);}else Object.assign(prod,obj);
+         const saved=await persistProd(isNew?obj:prod,isNew);if(!saved)return;
+         if(isNew)state.sel=obj.id;closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
+       }}]);
+  }else{
+    // Insumos: com setor
+    const setores=Object.keys(SETORES[dom]);
+    const cur=prod||{setor:setores[0],descricao:"",unidade:SETORES[dom][setores[0]].un,tamanhos:[...SETORES[dom][setores[0]].tamanhos],cores:[...SETORES[dom][setores[0]].cores]};
+    openModal((isNew?"Cadastrar":"Alterar")+" Produto · Insumos",`
+      <div class="mgrid">
+        <div class="mfield"><label>Tipo/Modelo <span class="req">*</span></label><select id="p_setor">${setores.map(s=>`<option ${cur.setor===s?"selected":""}>${s}</option>`).join("")}</select></div>
+        <div class="mfield"><label>Unidade</label><input id="p_un" value="${esc(cur.unidade)}"></div>
+        <div class="mfield full"><label>Descrição <span class="req">*</span></label><input id="p_desc" value="${esc(cur.descricao)}" placeholder="Nome do produto"></div>
+        <div class="mfield full"><label>Tamanhos (separe por vírgula)</label><input id="p_tam" value="${esc((cur.tamanhos||[]).join(", "))}" placeholder="Ex: A4, A3"></div>
+        <div class="mfield full"><label>Cores (separe por vírgula)</label><input id="p_cor" value="${esc((cur.cores||[]).join(", "))}" placeholder="Ex: Branco, Azul"></div>
+      </div>`,
+      [{label:"Cancelar",cls:"ghost",act:closeModal},
+       {label:"Salvar",cls:"primary",act:async()=>{
+         const desc=val("p_desc").trim();if(!desc){toast("Informe a descrição","erro");return;}
+         const setor=val("p_setor");
+         const obj={dom,setor,classificacao:setor,descricao:desc,unidade:val("p_un").trim()||"UN",codRef:"",
+           tamanhos:val("p_tam").split(",").map(s=>s.trim()).filter(Boolean),
+           cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
+         if(isNew){obj.id=uid();PRODUTOS.push(obj);state.sel=obj.id;}else Object.assign(prod,obj);
+         await persistProd();closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
+       }}]);
+    setTimeout(()=>{const ss=document.getElementById("p_setor");if(ss)ss.onchange=()=>{const c=SETORES[dom][ss.value];
+      document.getElementById("p_un").value=c.un;document.getElementById("p_tam").value=c.tamanhos.join(", ");document.getElementById("p_cor").value=c.cores.join(", ");};},0);
+  }
+}
+async function delProduto(){
+  const p=selProd();if(!p)return;const n=movOf(p.id).length;
+  const ok=await confirmModal("Excluir produto",`Excluir <b>${esc(p.descricao)}</b>?${n?` Também remove <b>${n}</b> movimentação(ões).`:""}`,"Excluir");
+  if(!ok)return;
+  const r=await deleteProdApi(p.id);if(!r)return;
+  PRODUTOS=PRODUTOS.filter(x=>x.id!==p.id);MOVS=MOVS.filter(m=>m.produtoId!==p.id);
+  state.sel=null;toast("Produto excluído.","ok");render();
+}
+
+/* ---- Movimentação (Entrada / Saída-insumos) ---- */
+function formMov(tipo){
+  const p=selProd();if(!p)return;const isSai=tipo==="saida";
+  const tamOpts=(p.tamanhos&&p.tamanhos.length)?`<div class="mfield"><label>Tamanho <span class="req">*</span></label><select id="m_tam">${isSai?'<option value="">—</option>':''}${p.tamanhos.map(t=>`<option>${esc(t)}</option>`).join("")}</select></div>`:"";
+  const corOpts=(p.cores&&p.cores.length)?`<div class="mfield"><label>Cor/Tipo <span class="req">*</span></label><select id="m_cor">${isSai?'<option value="">—</option>':''}${p.cores.map(c=>`<option>${esc(c)}</option>`).join("")}</select></div>`:"";
+  const colabList=colabListaAtivos(state.dom);
+  let body=`<div id="movAlert"></div><div class="mgrid"><div class="mfield"><label>Data <span class="req">*</span></label><input type="date" id="m_data" value="${today()}"></div>`;
+  body+=isSai?`<div class="mfield"><label>Colaborador (recebe) <span class="req">*</span></label><select id="m_parte"><option value="">— selecione —</option>${colabList.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>`
+              :`<div class="mfield"><label>Fornecedor</label><input id="m_parte" placeholder="Fornecedor / origem"></div>`;
+  body+=tamOpts+corOpts+`<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="m_qtd" min="1" step="1" value="1"></div>`;
+  body+=isSai?`<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="m_lib" placeholder="Responsável"></div><div class="mfield"><label>Disponível</label><input id="m_disp" readonly value="—"></div>`
+              :`<div class="mfield"><label>Custo unitário (R$)</label><input type="number" id="m_cu" min="0" step="0.01" placeholder="0,00"></div><div class="mfield"><label>Usuário</label><input id="m_user" placeholder="Quem lança"></div>`;
+  body+=`<div class="mfield full"><label>Observações</label><input id="m_obs" placeholder="${isSai?"Ex: troca…":"Ex: nota fiscal, lote…"}"></div></div>`;
+  openModal((isSai?"Saída":"Entrada")+" · "+esc(p.descricao),body,
+    [{label:"Cancelar",cls:"ghost",act:closeModal},{label:isSai?"Registrar Saída":"Registrar Entrada",cls:isSai?"primary":"green",act:()=>submitMov(tipo)}]);
+  setTimeout(()=>{
+    const upd=()=>{if(isSai){const d=document.getElementById("m_disp");if(d)d.value=saldoVar(p.id,val("m_tam"),val("m_cor"));}chk();};
+    ["m_tam","m_cor"].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=upd;});
+    if(isSai){const pe=document.getElementById("m_parte"),da=document.getElementById("m_data");if(pe)pe.onchange=chk;if(da)da.onchange=chk;}
+    upd();
+    function chk(){const box=document.getElementById("movAlert");if(!box)return;box.innerHTML="";if(!isSai)return;
+      const parte=val("m_parte").trim(),data=val("m_data");if(!parte)return;
+      const prev=MOVS.filter(m=>m.tipo==="saida"&&m.produtoId===p.id&&m.parte.trim().toLowerCase()===parte.toLowerCase()&&m.data<=data).sort((a,b)=>b.data>a.data?1:-1)[0];
+      if(prev){const d=days(prev.data,data);if(d>=0&&d<ALERTA_DIAS)box.innerHTML=`<div class="alert-line">⚠️ <b>Retirada recente.</b> ${esc(parte)} já retirou <b>${esc(p.descricao)}</b> em <b>${fmtD(prev.data)}</b> (há ${d} dia${d===1?"":"s"}). Intervalo inferior a ${ALERTA_DIAS} dias.</div>`;}}
+  },0);
+}
+async function submitMov(tipo){
+  const p=selProd();if(!p)return;const isSai=tipo==="saida";
+  const data=val("m_data"),qtd=Number(val("m_qtd")),parte=val("m_parte").trim();
+  const tam=(p.tamanhos&&p.tamanhos.length)?val("m_tam"):"";
+  const cor=(p.cores&&p.cores.length)?val("m_cor"):"";
+  if(!data||!qtd||qtd<=0){toast("Informe data e quantidade","erro");return;}
+  if(p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
+  if(p.cores&&p.cores.length&&!cor){toast("Selecione a cor/tipo","erro");return;}
+  if(isSai){
+    const lib=val("m_lib").trim();if(!parte||!lib){toast("Colaborador e liberado por obrigatórios","erro");return;}
+    const saldo=saldoVar(p.id,tam,cor);if(qtd>saldo){toast(`Estoque insuficiente. Disponível: ${saldo}.`,"erro");return;}
+    const prev=MOVS.filter(m=>m.tipo==="saida"&&m.produtoId===p.id&&m.parte.trim().toLowerCase()===parte.toLowerCase()&&m.data<=data).sort((a,b)=>b.data>a.data?1:-1)[0];
+    if(prev){const d=days(prev.data,data);if(d>=0&&d<ALERTA_DIAS){const ok=await confirmModal("Retirada em intervalo curto",`<b>${esc(parte)}</b> retirou <b>${esc(p.descricao)}</b> em <b>${fmtD(prev.data)}</b> (há ${d} dia${d===1?"":"s"}). Registrar mesmo assim?`,"Registrar");if(!ok)return;}}
+    var novaMov={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"saida",data,qtd,tamanho:tam,cor,parte,liberadoPor:lib,obs:val("m_obs").trim()};
+    const r_s=await persistMov(novaMov);if(!r_s)return;
+    MOVS.push(novaMov);
+    closeModal();toast(`Saída: ${qtd}× ${p.descricao} → ${parte}`,"ok");render();
+  }else{
+    var novaEnt={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"entrada",data,qtd,tamanho:tam,cor,parte:parte||"—",custoUnit:Number(val("m_cu"))||0,usuario:val("m_user").trim(),obs:val("m_obs").trim()};
+    const r_e=await persistMov(novaEnt);if(!r_e)return;
+    MOVS.push(novaEnt);
+    closeModal();toast(`Entrada: ${qtd}× ${p.descricao}`,"ok");render();
+  }
+}
+
+/* ===============================================================
+   ENTREGA DE EPI — WIZARD  (Dados → PIN → Foto → Assinatura → PDF)
+   =============================================================== */
+const EPI_WZ={step:0,dados:{},fotoDataUrl:null,assinDataUrl:null,stream:null,pinOk:false};
+const KEY_PINS="smg6f_pins";
+let PINS={};
+async function loadPins(){} // PINs vêm do Sheets sob demanda
+async function savePins(){} // não usado — savePin usa API diretamente
+
+function formEntrega(prefColab){
+  const prods=prodOf("safety").slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
+  if(!prods.length){toast("Cadastre produtos de Safety primeiro","erro");return;}
+  EPI_WZ.step=1;EPI_WZ.dados={};EPI_WZ.fotoDataUrl=null;EPI_WZ.assinDataUrl=null;EPI_WZ.pinOk=false;
+  if(EPI_WZ.stream){EPI_WZ.stream.getTracks().forEach(t=>t.stop());EPI_WZ.stream=null;}
+  _wz_step1(prods,prefColab);
+}
+
+/* ── helper: barra de progresso wizard ── */
+function _wz_steps(ativo){
+  var defs=[["1","Dados"],["2","PIN"],["3","Foto"],["4","Assinatura"]];
+  var html='<div style="display:flex;gap:8px;margin-bottom:16px">';
+  for(var i=0;i<defs.length;i++){
+    var idx=i+1, n=defs[i][0], l=defs[i][1];
+    var bg,col,lbl;
+    if(idx<ativo){bg="var(--green)";col="#fff";lbl="&#10003; "+l;}
+    else if(idx===ativo){bg="var(--blue)";col="#fff";lbl=n+". "+l;}
+    else{bg="#eef1f5";col="var(--txt-faint)";lbl=n+". "+l;}
+    html+='<div style="flex:1;text-align:center;padding:6px 0;border-radius:6px;font-size:11px;font-weight:700;background:'+bg+';color:'+col+';letter-spacing:.05em">'+lbl+'</div>';
+  }
+  return html+'</div>';
+}
+
+/* ── ETAPA 1 · Dados da Entrega ── */
+function _wz_step1(prods,prefColab){
+  var colabList=colabListaAtivos("safety");
+  var colabOpts='<option value="">— selecione —</option>';
+  for(var i=0;i<colabList.length;i++){
+    var c=colabList[i];
+    colabOpts+='<option value="'+esc(c)+'"'+(prefColab&&c===prefColab?' selected':'')+'>'+esc(c)+'</option>';
+  }
+  var prodOpts='<option value="">— selecione —</option>';
+  for(var j=0;j<prods.length;j++){
+    prodOpts+='<option value="'+prods[j].id+'">'+esc(prods[j].descricao)+'</option>';
+  }
+  var body=_wz_steps(1)
+    +'<div id="movAlert"></div>'
+    +'<div class="mgrid">'
+    +'<div class="mfield"><label>Data <span class="req">*</span></label><input type="date" id="ew_data" value="'+today()+'"></div>'
+    +'<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="ew_lib" placeholder="Respons&aacute;vel pela entrega"></div>'
+    +'<div class="mfield full"><label>Colaborador (recebe) <span class="req">*</span></label><select id="ew_colab">'+colabOpts+'</select></div>'
+    +'<div class="mfield full"><label>EPI / Produto <span class="req">*</span></label><select id="ew_prod">'+prodOpts+'</select></div>'
+    +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
+    +'<div class="mfield"><label>Dispon&iacute;vel</label><input id="ew_disp" readonly value="&#8212;"></div>'
+    +'<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="ew_qtd" min="1" step="1" value="1"></div>'
+    +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: troca, EPI danificado&#8230;"></div>'
+    +'</div>';
+  openModal("Nova Entrega de EPI \u2014 Etapa 1 de 4",body,[
+    {label:"Cancelar",cls:"ghost",act:function(){closeModal();}},
+    {label:"Pr&oacute;ximo: PIN \u2192",cls:"primary",act:_wz_validarDados}
+  ]);
+  setTimeout(function(){
+    var ps=document.getElementById("ew_prod"),
+        ts=document.getElementById("ew_tam"),
+        disp=document.getElementById("ew_disp"),
+        cp=document.getElementById("ew_colab"),
+        da=document.getElementById("ew_data");
+    function fill(){
+      var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
+      ts.innerHTML='<option value="">&#8212;</option>';
+      if(pr&&pr.tamanhos&&pr.tamanhos.length){
+        pr.tamanhos.forEach(function(t){ts.innerHTML+='<option>'+esc(t)+'</option>';});
+      }
+      upd();
+    }
+    function upd(){
+      var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
+      disp.value=pr?saldoVar(pr.id,ts.value,""):"&#8212;";
+      chk();
+    }
+    function chk(){
+      var box=document.getElementById("movAlert");
+      if(!box)return;
+      box.innerHTML="";
+      var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
+      var parte=(cp?cp.value:"").trim(), data=da?da.value:"";
+      if(!pr||!parte)return;
+      var prev=MOVS.filter(function(m){
+        return m.tipo==="saida"&&m.produtoId===pr.id&&m.parte.trim().toLowerCase()===parte.toLowerCase()&&m.data<=data;
+      }).sort(function(a,b){return b.data>a.data?1:-1;})[0];
+      if(prev){
+        var dd=days(prev.data,data);
+        if(dd>=0&&dd<ALERTA_DIAS){
+          var tm=prev.tamanho?", tam. "+esc(prev.tamanho):"";
+          box.innerHTML='<div class="alert-line">&#9888;&#65039; <b>Entrega recente.</b> '+esc(parte)+' j&aacute; recebeu <b>'+esc(pr.descricao)+'</b> em <b>'+fmtD(prev.data)+'</b> (h&aacute; '+dd+' dia'+(dd===1?"":"s")+tm+'). Intervalo inferior a '+ALERTA_DIAS+' dias.</div>';
+        }
+      }
+    }
+    if(ps)ps.onchange=fill;
+    if(ts)ts.onchange=upd;
+    if(cp)cp.onchange=chk;
+    if(da)da.onchange=chk;
+  },0);
+}
+
+function _wz_validarDados(){
+  var colab=(document.getElementById("ew_colab")||{}).value||"";
+  colab=colab.trim();
+  var prod=((document.getElementById("ew_prod")||{}).value)||"";
+  var qtd=Number(((document.getElementById("ew_qtd")||{}).value)||0);
+  var lib=((document.getElementById("ew_lib")||{}).value||"").trim();
+  var data=((document.getElementById("ew_data")||{}).value)||"";
+  var tam=((document.getElementById("ew_tam")||{}).value)||"";
+  var obs=((document.getElementById("ew_obs")||{}).value)||"";
+  var p=PRODUTOS.find(function(x){return x.id===prod;});
+  if(!colab||!prod||!qtd||qtd<=0||!lib||!data){toast("Preencha todos os campos obrigat\u00f3rios","erro");return;}
+  if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
+  var saldo=saldoVar(prod,tam,"");
+  if(qtd>saldo){toast("Estoque insuficiente. Dispon\u00edvel: "+saldo+".","erro");return;}
+  EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs};
+  _wz_step2();
+}
+
+/* ── ETAPA 2 · PIN ── */
+function _wz_step2(){
+  var nome=EPI_WZ.dados.colab;
+  EPI_WZ._pinCache=null;
+  // Buscar PIN atual via API (assíncrono)
+  api("getPin",{nome:nome},true).then(function(r){
+    if(r.ok&&r.pin){EPI_WZ._pinCache=r.pin;}
+  });
+  var temPin=false; // será definido quando usuário clicar em Próximo
+
+  var pinConf=temPin?""
+    :'<div style="font-size:12px;color:var(--txt-dim)">Confirme o PIN:</div>'
+    +'<input id="wz_pin2" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*" autocomplete="off" '
+    +'style="font-size:32px;letter-spacing:14px;text-align:center;width:180px;border:2px solid var(--line);'
+    +'border-radius:10px;padding:14px 10px;font-family:var(--mono)" placeholder="&#8226;&#8226;&#8226;&#8226;">';
+  var body=_wz_steps(2)
+    +'<div style="text-align:center;padding:8px 0 16px">'
+    +'<div style="font-size:18px;font-weight:800;font-family:var(--disp)">'+esc(nome)+'</div>'
+    +'<div style="font-size:12px;color:var(--txt-dim);margin-top:4px">'
+    +(temPin?"Digite seu PIN de 4 d\u00edgitos para confirmar":"Cadastre um PIN de 4 d\u00edgitos para este colaborador")
+    +'</div></div>'
+    +'<div style="display:flex;flex-direction:column;align-items:center;gap:12px">'
+    +'<input id="wz_pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*" autocomplete="off" '
+    +'style="font-size:32px;letter-spacing:14px;text-align:center;width:180px;border:2px solid var(--line);'
+    +'border-radius:10px;padding:14px 10px;font-family:var(--mono)" placeholder="&#8226;&#8226;&#8226;&#8226;">'
+    +pinConf
+    +'<div id="pin_err" style="color:var(--red);font-size:12px;min-height:16px"></div>'
+    +'</div>';
+  openModal("Nova Entrega de EPI \u2014 Etapa 2 de 4",body,[
+    {label:"\u2190 Voltar",cls:"ghost",act:function(){
+      _wz_step1(prodOf("safety").slice().sort(function(a,b){return a.descricao.localeCompare(b.descricao,"pt-BR");}),EPI_WZ.dados.colab);
+    }},
+    {label:"Pr\u00f3ximo: Foto \u2192",cls:"primary",act:_wz_validarPin}
+  ]);
+  setTimeout(function(){
+    var pi=document.getElementById("wz_pin");
+    if(pi){
+      pi.focus();
+      pi.addEventListener("keydown",function(e){if(e.key==="Enter")_wz_validarPin();});
+    }
+  },100);
+}
+
+async function _wz_validarPin(){
+  var nome=EPI_WZ.dados.colab;
+  var pinEl=document.getElementById("wz_pin");
+  var pin=pinEl?pinEl.value:"";
+  var err=document.getElementById("pin_err");
+  if(!/^\d{4}$/.test(pin)){if(err)err.textContent="PIN deve ter exatamente 4 d\u00edgitos.";return;}
+  if(!EPI_WZ._pinCache){
+    var pin2El=document.getElementById("wz_pin2");
+    var pin2=pin2El?pin2El.value:"";
+    if(pin!==pin2){if(err)err.textContent="Os PINs n\u00e3o coincidem. Tente novamente.";return;}
+    // Cadastrar PIN via API
+    const rcad=await api("savePin",{nome,pin},true);
+    if(!rcad.ok){if(err)err.textContent="Erro ao salvar PIN.";return;}
+    toast("PIN cadastrado para "+nome,"ok");
+  }else{
+    if(EPI_WZ._pinCache!==pin){
+      if(err)err.textContent="PIN incorreto. Tente novamente.";
+      if(pinEl){pinEl.value="";pinEl.focus();}
+      return;
+    }
+  }
+  EPI_WZ.pinOk=true;
+  _wz_step3();
+}
+
+/* ── ETAPA 3 · Foto ── */
+function _wz_step3(){
+  var body=_wz_steps(3)
+    +'<div style="text-align:center">'
+    +'<div style="font-size:13px;color:var(--txt-dim);margin-bottom:12px">Posicione o colaborador em frente &agrave; c&acirc;mera e clique em <b>Capturar Foto</b>.</div>'
+    +'<div style="position:relative;display:inline-block">'
+    +'<video id="wz_video" autoplay playsinline muted style="width:100%;max-width:380px;border-radius:10px;border:2px solid var(--line);background:#111;display:block"></video>'
+    +'<canvas id="wz_canvas" style="display:none"></canvas>'
+    +'</div>'
+    +'<div id="wz_foto_prev" style="display:none;margin-top:10px">'
+    +'<img id="wz_foto_img" style="max-width:380px;width:100%;border-radius:10px;border:2px solid var(--green)">'
+    +'<div style="color:var(--green);font-weight:600;margin-top:6px;font-size:13px">&#10003; Foto capturada!</div>'
+    +'</div>'
+    +'<div id="cam_err" style="color:var(--red);font-size:12px;margin-top:8px"></div>'
+    +'<div style="display:flex;gap:8px;justify-content:center;margin-top:12px">'
+    +'<button class="btn ghost sm" id="wz_recapture" style="display:none" onclick="_wz_recapturar()">&#8635; Recapturar</button>'
+    +'<button class="btn green" id="wz_snap_btn" onclick="_wz_capturarFoto()">&#128247; Capturar Foto</button>'
+    +'</div></div>';
+  openModal("Nova Entrega de EPI \u2014 Etapa 3 de 4",body,[
+    {label:"\u2190 Voltar",cls:"ghost",act:function(){_wz_pararCamera();_wz_step2();}},
+    {label:"Pr\u00f3ximo: Assinatura \u2192",cls:"primary",act:_wz_validarFoto}
+  ]);
+  setTimeout(function(){
+    navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false})
+    .then(function(s){
+      EPI_WZ.stream=s;
+      var v=document.getElementById("wz_video");
+      if(v)v.srcObject=s;
+    })
+    .catch(function(e){
+      var err=document.getElementById("cam_err");
+      if(err)err.textContent="C\u00e2mera n\u00e3o dispon\u00edvel: "+e.message+". Clique em 'Pular Foto' ou habilite a c\u00e2mera.";
+      var sb=document.getElementById("wz_snap_btn");if(sb)sb.disabled=true;
+      var foot=document.querySelector(".modal-foot");
+      if(foot&&!document.getElementById("wz_skip_foto")){
+        var sk=document.createElement("button");
+        sk.className="btn ghost sm";sk.id="wz_skip_foto";
+        sk.textContent="\u26a0 Pular Foto";
+        sk.onclick=function(){EPI_WZ.fotoDataUrl=null;_wz_step4();};
+        foot.insertBefore(sk,foot.children[1]);
+      }
+    });
+  },200);
+}
+
+function _wz_capturarFoto(){
+  var v=document.getElementById("wz_video"),c=document.getElementById("wz_canvas");
+  if(!v||!c)return;
+  c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+  c.getContext("2d").drawImage(v,0,0,c.width,c.height);
+  EPI_WZ.fotoDataUrl=c.toDataURL("image/jpeg",0.85);
+  var fi=document.getElementById("wz_foto_img");
+  if(fi)fi.src=EPI_WZ.fotoDataUrl;
+  var fp=document.getElementById("wz_foto_prev");if(fp)fp.style.display="block";
+  var sb=document.getElementById("wz_snap_btn");if(sb)sb.style.display="none";
+  var rc=document.getElementById("wz_recapture");if(rc)rc.style.display="inline-flex";
+  _wz_pararCamera();
+}
+function _wz_recapturar(){
+  EPI_WZ.fotoDataUrl=null;
+  var fp=document.getElementById("wz_foto_prev");if(fp)fp.style.display="none";
+  var sb=document.getElementById("wz_snap_btn");if(sb)sb.style.display="inline-flex";
+  var rc=document.getElementById("wz_recapture");if(rc)rc.style.display="none";
+  navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false})
+  .then(function(s){EPI_WZ.stream=s;var v=document.getElementById("wz_video");if(v){v.srcObject=s;v.style.display="block";}})
+  .catch(function(){});
+}
+function _wz_pararCamera(){
+  if(EPI_WZ.stream){EPI_WZ.stream.getTracks().forEach(function(t){t.stop();});EPI_WZ.stream=null;}
+}
+function _wz_validarFoto(){
+  _wz_pararCamera();
+  if(!EPI_WZ.fotoDataUrl){
+    if(!confirm("Nenhuma foto capturada. Prosseguir mesmo assim?"))return;
+  }
+  _wz_step4();
+}
+
+/* ── ETAPA 4 · Assinatura ── */
+function _wz_step4(){
+  var prodObj=PRODUTOS.find(function(x){return x.id===EPI_WZ.dados.prod;})||{descricao:""};
+  var body=_wz_steps(4)
+    +'<div style="text-align:center;margin-bottom:10px">'
+    +'<div style="font-size:13px;color:var(--txt-dim)">Colaborador: <b>'+esc(EPI_WZ.dados.colab)+'</b> &middot; Produto: <b>'+esc(prodObj.descricao)+'</b></div>'
+    +'<div style="font-size:12px;color:var(--txt-faint);margin-top:4px">Assine no campo abaixo com o dedo ou mouse para confirmar o recebimento.</div>'
+    +'</div>'
+    +'<div style="position:relative;border:2px dashed var(--line);border-radius:10px;background:#fafbfd;touch-action:none">'
+    +'<canvas id="sig_canvas" style="display:block;width:100%;height:180px;cursor:crosshair;border-radius:8px"></canvas>'
+    +'<div style="position:absolute;bottom:8px;right:10px;font-size:10px;color:var(--txt-faint);font-style:italic">&times; Assine aqui</div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:flex-end;margin-top:6px">'
+    +'<button class="btn ghost sm" onclick="_wz_limparAssinatura()">&times; Limpar</button>'
+    +'</div>'
+    +'<div id="sig_err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:4px"></div>';
+  openModal("Nova Entrega de EPI \u2014 Etapa 4 de 4",body,[
+    {label:"\u2190 Voltar",cls:"ghost",act:_wz_step3},
+    {label:"\u2713 Confirmar e Gerar PDF",cls:"green",act:_wz_finalizar}
+  ]);
+  setTimeout(function(){_wz_initCanvas();},100);
+}
+
+function _wz_initCanvas(){
+  var canvas=document.getElementById("sig_canvas");if(!canvas)return;
+  var rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=Math.max(rect.width-4,200);canvas.height=180;
+  var ctx=canvas.getContext("2d");
+  ctx.fillStyle="#fafbfd";ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle="#1d2733";ctx.lineWidth=2.5;ctx.lineCap="round";ctx.lineJoin="round";
+  var drawing=false,lx=0,ly=0;
+  function getPos(e){
+    var r=canvas.getBoundingClientRect();
+    var src=e.touches?e.touches[0]:e;
+    return{x:(src.clientX-r.left)*(canvas.width/r.width),y:(src.clientY-r.top)*(canvas.height/r.height)};
+  }
+  canvas.addEventListener("mousedown",function(e){drawing=true;var p=getPos(e);lx=p.x;ly=p.y;});
+  canvas.addEventListener("mousemove",function(e){if(!drawing)return;var p=getPos(e);ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(p.x,p.y);ctx.stroke();lx=p.x;ly=p.y;});
+  canvas.addEventListener("mouseup",function(){drawing=false;});
+  canvas.addEventListener("mouseleave",function(){drawing=false;});
+  canvas.addEventListener("touchstart",function(e){e.preventDefault();drawing=true;var p=getPos(e);lx=p.x;ly=p.y;},{passive:false});
+  canvas.addEventListener("touchmove",function(e){e.preventDefault();if(!drawing)return;var p=getPos(e);ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(p.x,p.y);ctx.stroke();lx=p.x;ly=p.y;},{passive:false});
+  canvas.addEventListener("touchend",function(){drawing=false;});
+}
+function _wz_limparAssinatura(){
+  var c=document.getElementById("sig_canvas");if(!c)return;
+  var ctx=c.getContext("2d");ctx.fillStyle="#fafbfd";ctx.fillRect(0,0,c.width,c.height);
+  EPI_WZ.assinDataUrl=null;
+}
+function _wz_assinVazia(){
+  var c=document.getElementById("sig_canvas");if(!c)return true;
+  var d=c.getContext("2d").getImageData(0,0,c.width,c.height).data;
+  for(var i=0;i<d.length;i+=4){if(d[i]<240||d[i+1]<240||d[i+2]<240)return false;}
+  return true;
+}
+async function _wz_finalizar(){
+  if(_wz_assinVazia()){var err=document.getElementById("sig_err");if(err)err.textContent="Por favor, assine antes de confirmar.";return;}
+  var c=document.getElementById("sig_canvas");
+  EPI_WZ.assinDataUrl=c?c.toDataURL("image/png"):null;
+  var d=EPI_WZ.dados,p=PRODUTOS.find(function(x){return x.id===d.prod;});
+  var wzMov={id:uid(),_t:Date.now(),produtoId:p.id,dom:"safety",tipo:"saida",data:d.data,qtd:d.qtd,tamanho:d.tam,cor:"",parte:d.colab,liberadoPor:d.lib,obs:d.obs,temRecibo:true};
+  const r_w=await persistMov(wzMov);if(!r_w){toast("Erro ao salvar entrega","erro");return;}
+  MOVS.push(wzMov);
+  closeModal();
+  toast("Entrega registrada: "+d.qtd+"× "+p.descricao+" → "+d.colab,"ok");
+  // Gerar PDF e salvar no Drive em paralelo
+  var fotoSnap=EPI_WZ.fotoDataUrl, assinSnap=EPI_WZ.assinDataUrl;
+  await _wz_gerarPDF(d,p,fotoSnap,assinSnap);
+  // Sincronizar com Google Sheets
+  var movNovo=MOVS[MOVS.length-1];
+  driveSyncSheet(movNovo,p).catch(function(){});
+  state.dom="safety";state.view="colaboradores";state.colab=d.colab;render();
+}
+
+
+async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
+  // fotoUrl/assinUrl opcionais — usa EPI_WZ se não fornecidos
+  var foto=fotoUrl!==undefined?fotoUrl:EPI_WZ.fotoDataUrl;
+  var assin=assinUrl!==undefined?assinUrl:EPI_WZ.assinDataUrl;
+  var now=new Date();
+  var dtHora=now.toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  var tamCell=d.tam
+    ?'<div class="cell"><label>Tamanho</label><div class="v"><span class="chip">'+d.tam+'</span></div></div>'
+    :'<div class="cell"><label>Tamanho</label><div class="v">&#8212;</div></div>';
+  var obsCell=d.obs
+    ?'<div class="cell full"><label>Observa&#231;&#245;es</label><div class="v">'+d.obs+'</div></div>'
+    :'';
+  var fotoBlock=foto
+    ?'<img src="'+foto+'" alt="Foto do colaborador" style="width:160px;height:120px;object-fit:cover;display:block">'
+    :'<div style="width:160px;height:120px;display:flex;align-items:center;justify-content:center;color:#8b94a3;font-size:12px;font-style:italic">Sem foto</div>';
+  var assinBlock=assin
+    ?'<img src="'+assin+'" alt="Assinatura" style="max-width:100%;height:120px;object-fit:contain;display:block">'
+    :'<div style="color:#8b94a3;font-style:italic;font-size:12px">Sem assinatura</div>';
+  var hora=now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comprovante EPI</title>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:"Segoe UI",Arial,sans-serif;font-size:13px;color:#1d2733;background:#fff;padding:30px}'
+    +'.header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1f5fb8;padding-bottom:14px;margin-bottom:20px}'
+    +'.mark{width:40px;height:40px;border-radius:8px;background:#1f5fb8;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px}'
+    +'.logo{display:flex;align-items:center;gap:12px}'
+    +'h1{font-size:20px;font-weight:800;color:#1f5fb8}'
+    +'.sub{font-size:11px;color:#8b94a3;letter-spacing:.1em;text-transform:uppercase}'
+    +'.dthr{font-size:11px;color:#5b6675;text-align:right}'
+    +'.title{text-align:center;font-size:17px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#1f5fb8;margin:0 0 20px;padding:10px 0;border-bottom:1px solid #d3dae4}'
+    +'.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #d3dae4;border-radius:8px;overflow:hidden;margin-bottom:16px}'
+    +'.cell{padding:10px 14px;border-right:1px solid #d3dae4;border-bottom:1px solid #d3dae4}'
+    +'.cell:nth-child(even){border-right:none}'
+    +'.cell:nth-last-child(-n+2){border-bottom:none}'
+    +'.cell.full{grid-column:1/-1;border-right:none}'
+    +'.cell label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b94a3;font-weight:700;display:block;margin-bottom:3px}'
+    +'.cell .v{font-size:14px;font-weight:600}'
+    +'.chip{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:700;background:#dbe9fb;color:#16498f;border:1px solid #bcd5f4}'
+    +'.sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8b94a3;margin-bottom:8px;border-bottom:1px solid #eef1f5;padding-bottom:4px}'
+    +'.media-row{display:flex;gap:16px;align-items:flex-start}'
+    +'.foto-box{flex:0 0 160px;border:1px solid #d3dae4;border-radius:8px;overflow:hidden;background:#f6f8fb}'
+    +'.assin-box{flex:1;border:1px solid #d3dae4;border-radius:8px;padding:10px;background:#fafbfd}'
+    +'.assin-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b94a3;font-weight:700;margin-bottom:6px}'
+    +'.legal{background:#f6f8fb;border:1px solid #d3dae4;border-radius:8px;padding:12px 16px;font-size:11.5px;line-height:1.6;color:#5b6675;margin:16px 0}'
+    +'.footer{text-align:center;font-size:10px;color:#8b94a3;border-top:1px solid #d3dae4;padding-top:10px;margin-top:20px}'
+    +'.btn-row{text-align:center;margin-top:16px;display:flex;gap:10px;justify-content:center}'
+    +'@media print{.btn-row{display:none}body{padding:10px}}'
+    +'</style></head><body>'
+    +'<div class="header">'
+    +'<div class="logo"><div class="mark">ML</div><div><h1>Mercado Livre</h1><div class="sub">Controle de EPI &middot; SMG6</div></div></div>'
+    +'<div class="dthr"><b>Emitido em:</b><br>'+dtHora+'</div>'
+    +'</div>'
+    +'<div class="title">Comprovante de Entrega de EPI</div>'
+    +'<div style="margin-bottom:16px"><div class="sec-title">Dados do Colaborador</div>'
+    +'<div class="grid2"><div class="cell full"><label>Nome Completo</label><div class="v">'+d.colab+'</div></div></div></div>'
+    +'<div style="margin-bottom:16px"><div class="sec-title">Dados do EPI Entregue</div>'
+    +'<div class="grid2">'
+    +'<div class="cell full"><label>Produto / EPI</label><div class="v">'+p.descricao+'</div></div>'
+    +tamCell
+    +'<div class="cell"><label>Quantidade</label><div class="v">'+d.qtd+' '+(p.unidade||'UN')+'</div></div>'
+    +'<div class="cell"><label>Data de Entrega</label><div class="v">'+fmtD(d.data)+'</div></div>'
+    +'<div class="cell"><label>Liberado por</label><div class="v">'+d.lib+'</div></div>'
+    +obsCell
+    +'</div></div>'
+    +'<div style="margin-bottom:16px"><div class="sec-title">Registro Fotogr&aacute;fico e Assinatura</div>'
+    +'<div class="media-row">'
+    +'<div class="foto-box">'+fotoBlock+'</div>'
+    +'<div class="assin-box"><div class="assin-label">Assinatura do Colaborador</div>'
+    +assinBlock
+    +'<div style="margin-top:10px;border-top:1px solid #d3dae4;padding-top:8px;font-size:11px;color:#5b6675">'
+    +d.colab+'<br><span style="font-size:10px;color:#8b94a3">'+fmtD(d.data)+' &mdash; '+hora+'</span></div>'
+    +'</div></div></div>'
+    +'<div class="legal"><b>Declara&#231;&#227;o:</b> Eu, <b>'+d.colab+'</b>, declaro ter recebido o(s) Equipamento(s) de Prote&#231;&#227;o Individual '
+    +'descritos neste documento, em perfeito estado de conserva&#231;&#227;o. Comprometo-me a utiliz&#225;-lo(s) sempre que necess&#225;rio, '
+    +'zelar pela sua conserva&#231;&#227;o e comunicar imediatamente qualquer avaria. A assinatura e foto confirmam a ci&#234;ncia e aceite.</div>'
+    +'<div class="footer">Documento gerado automaticamente &mdash; Sistema de Controle de Estoque SMG6 &middot; Mercado Livre<br>'
+    +'Comprovante de entrega de EPI conforme NR-6.</div>'
+    +'<div class="btn-row">'
+    +'<button onclick="window.print()" style="background:#1f5fb8;color:#fff;border:none;padding:10px 28px;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer">&#128438; Imprimir / Salvar PDF</button>'
+    +'<button onclick="window.close()" style="background:#eef1f5;color:#1d2733;border:1px solid #d3dae4;padding:10px 28px;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer">Fechar</button>'
+    +'</div>'
+    +'</body></html>';
+  var blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var win=window.open(url,'_blank','width=820,height=900,scrollbars=yes');
+  if(!win){var a=document.createElement('a');a.href=url;a.download='recibo_epi_'+d.colab.replace(/\s+/g,'_')+'_'+d.data+'.html';a.click();}
+  setTimeout(function(){URL.revokeObjectURL(url);},60000);
+  // Salvar comprovante automaticamente no Google Drive
+  var nomeArq='Recibo_EPI_'+d.colab.replace(/\s+/g,'_')+'_'+d.data+'.html';
+  driveUploadComprovante(nomeArq, html).then(function(r){
+    if(r)toast("Comprovante salvo no Drive ✓","ok");
+    else toast("Comprovante gerado (Drive indisponível)","warn");
+  });
+}
+
+/* Reemitir recibo a partir de movimentação existente (sem foto/assinatura em memória) */
+async function reemitirRecibo(movId){
+  var mv=MOVS.find(function(x){return x.id===movId;});
+  if(!mv){toast("Movimentação não encontrada","erro");return;}
+  var p=PRODUTOS.find(function(x){return x.id===mv.produtoId;});
+  if(!p){toast("Produto não encontrado","erro");return;}
+  var d={colab:mv.parte,prod:mv.produtoId,qtd:mv.qtd,lib:mv.liberadoPor||"",data:mv.data,tam:mv.tamanho||"",obs:mv.obs||""};
+  await _wz_gerarPDF(d,p,null,null);
+}
+
+async function delMov(id){const ok=await confirmModal("Excluir registro","Remover esta movimentação? O saldo será recalculado.","Excluir");if(!ok)return;
+  const r=await deleteMovApi(id);if(!r)return;
+  MOVS=MOVS.filter(m=>m.id!==id);render();}
+
+function editMov(id){
+  const mv=MOVS.find(m=>m.id===id);if(!mv||mv.tipo!=="entrada")return;
+  const p=PRODUTOS.find(x=>x.id===mv.produtoId);if(!p)return;
+  const tamOpts=(p.tamanhos&&p.tamanhos.length)?`<div class="mfield"><label>Tamanho</label><select id="em_tam">${p.tamanhos.map(t=>`<option ${mv.tamanho===t?"selected":""}>${esc(t)}</option>`).join("")}</select></div>`:"";
+  const corOpts=(p.cores&&p.cores.length)?`<div class="mfield"><label>Cor/Tipo</label><select id="em_cor">${p.cores.map(c=>`<option ${mv.cor===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>`:"";
+  const body=`<div class="mgrid">
+    <div class="mfield"><label>Data <span class="req">*</span></label><input type="date" id="em_data" value="${mv.data}"></div>
+    <div class="mfield"><label>Fornecedor</label><input id="em_parte" value="${esc(mv.parte||"")}" placeholder="Fornecedor / origem"></div>
+    ${tamOpts}${corOpts}
+    <div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="em_qtd" min="1" step="1" value="${mv.qtd}"></div>
+    <div class="mfield"><label>Custo unitário (R$)</label><input type="number" id="em_cu" min="0" step="0.01" value="${mv.custoUnit||0}"></div>
+    <div class="mfield"><label>Usuário</label><input id="em_user" value="${esc(mv.usuario||"")}"></div>
+    <div class="mfield full"><label>Observações</label><input id="em_obs" value="${esc(mv.obs||"")}"></div>
+  </div>`;
+  openModal("Editar Entrada · "+esc(p.descricao),body,[
+    {label:"Cancelar",cls:"ghost",act:closeModal},
+    {label:"Salvar Alterações",cls:"primary",act:async()=>{
+      const qtd=Number(document.getElementById("em_qtd")?.value);
+      const data=document.getElementById("em_data")?.value;
+      if(!data||!qtd||qtd<=0){toast("Informe data e quantidade","erro");return;}
+      mv.data=data;
+      mv.qtd=qtd;
+      mv.parte=document.getElementById("em_parte")?.value.trim()||"—";
+      mv.custoUnit=Number(document.getElementById("em_cu")?.value)||0;
+      mv.usuario=document.getElementById("em_user")?.value.trim()||"";
+      mv.obs=document.getElementById("em_obs")?.value.trim()||"";
+      if(p.tamanhos&&p.tamanhos.length){const t=document.getElementById("em_tam");if(t)mv.tamanho=t.value;}
+      if(p.cores&&p.cores.length){const c=document.getElementById("em_cor");if(c)mv.cor=c.value;}
+      const r_u=await updateMovApi(mv);if(!r_u)return;closeModal();toast("Entrada atualizada.","ok");render();
+    }}]);
+}
+
+/* ---- CSV ---- */
+function exportCSV(){const dom=state.dom,{start,end}=_repRange;
+  const ms=MOVS.filter(m=>m.dom===dom&&m.data>=start&&m.data<=end).sort((a,b)=>a.data>b.data?1:-1);
+  let csv="Data;Tipo;Produto;Tamanho;Cor;Quantidade;Colaborador/Fornecedor;Liberado por;Custo unit;Observacoes\n";
+  ms.forEach(m=>{const p=PRODUTOS.find(x=>x.id===m.produtoId);csv+=`${m.data};${m.tipo};${p?p.descricao:"?"};${m.tamanho||""};${m.cor||""};${m.qtd};${m.parte||""};${m.liberadoPor||""};${m.custoUnit||""};${(m.obs||"").replace(/;/g,",")}\n`;});
+  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`relatorio_${dom}_${start}_${end}.csv`;a.click();toast("CSV exportado.","ok");}
+
+/* ================= MODAL / TOAST ================= */
+function openModal(title,body,buttons){const m=document.getElementById("modal");
+  m.innerHTML=`<div class="modal-head"><h3>${title}</h3><button class="x" onclick="closeModal()">×</button></div><div class="modal-body">${body}</div><div class="modal-foot">${buttons.map((b,i)=>`<button class="btn ${b.cls}" data-mb="${i}">${b.label}</button>`).join("")}</div>`;
+  document.getElementById("overlay").classList.add("show");m.querySelectorAll("[data-mb]").forEach((btn,i)=>btn.onclick=buttons[i].act);}
+function closeModal(){document.getElementById("overlay").classList.remove("show");}
+function confirmModal(t,msg,cl){return new Promise(res=>{openModal(t,`<div style="font-size:14px;line-height:1.55">${msg}</div>`,[{label:"Cancelar",cls:"ghost",act:()=>{closeModal();res(false);}},{label:cl||"Confirmar",cls:"danger",act:()=>{closeModal();res(true);}}]);});}
+document.getElementById("overlay").onclick=e=>{if(e.target.id==="overlay")closeModal();};
+function toast(msg,type){const t=document.createElement("div");t.className="toast "+(type||"");t.textContent=msg;document.getElementById("toasts").appendChild(t);setTimeout(()=>{t.style.transition=".3s";t.style.opacity="0";t.style.transform="translateX(40px)";setTimeout(()=>t.remove(),300);},3000);}
+
+/* ================= BOOT ================= */
+document.querySelectorAll(".dom-tab").forEach(b=>b.onclick=()=>{state.dom=b.dataset.dom;state.sel=null;state.colab=null;state.histColab=null;render();});
+document.querySelectorAll("#menu button").forEach(b=>b.onclick=()=>{state.view=b.dataset.view;state.colab=null;state.histColab=null;render();});
+document.addEventListener("keydown",e=>{
+  if(state.view!=="estoque"||!selProd()||document.getElementById("overlay").classList.contains("show"))return;
+  if(e.key==="F5"){e.preventDefault();formMov("entrada");}
+  if(e.key==="F6"&&state.dom==="insumos"){e.preventDefault();formMov("saida");}
+});
+setInterval(()=>{document.getElementById("clock").textContent=new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});},1000);
+(async()=>{
+  // Mostrar botão Usuários para admins após login
+  window._postLoginHook=function(){
+    const u=getUser();
+    const mu=document.getElementById("menuUsuarios");
+    if(mu)mu.style.display=u&&u.nivel==="admin"?"":"none";
+  };
+  // Verificar se já há sessão válida (token em sessionStorage)
+  const token=getToken();
+  if(token){
+    // Testar token fazendo getAll
+    const loadOk = await loadAll();
+    if(loadOk){
+      const u=getUser();
+      document.getElementById("app").style.display="";
+      var saveEl=document.getElementById("save");
+      if(saveEl&&u)saveEl.textContent=u.nome||u.email;
+      const t=today();
+      state.view="estoque";state.sel=null;state.colab=null;
+      state.repMonth=t.slice(0,7);state.repYear=Number(t.slice(0,4));
+      state.repWeek=weekOfYear(t);state.repStart=t.slice(0,8)+"01";state.repEnd=t;
+      if(window._postLoginHook)window._postLoginHook();
+      await loadPins();
+      render();return;
+    }else{clearSession();}
+  }
+  showLogin();
+})();
+</script>
+</body>
+</html>
