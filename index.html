@@ -224,7 +224,7 @@ const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","
 const MESES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const ALERTA_DIAS=15;
 /* ── Google Sheets / Apps Script ── */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNPKv7inxLzI1BU1H_odWAqQDWvN9C80usTDEm9Vm9RzE8KaTwo1eL-1yzwphXZCATVg/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbySsTW81d7uHKp7No4xKZyTt6EKFC7YRxOWPR_Y4gjAm2OrNhgMhXDy5xtpkxzFVLV4sA/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
 const DRIVE_FOLDER_EPI = "1xIq3muw068guiHAPAEe17NA_pyjUTpPg";
 let   DRIVE_STATUS = "idle";
 
@@ -785,6 +785,8 @@ function render(){
     const menuDesl=document.getElementById("menuDesl");
     if(menuColab)menuColab.style.display=isInsumos?"none":"";
     if(menuDesl)menuDesl.style.display=isInsumos?"none":"";
+    const menuUsuarios=document.getElementById("menuUsuarios");
+    if(menuUsuarios)menuUsuarios.style.display=isAdmin()?"":"none";
     if(isInsumos&&(state.view==="colaboradores"||state.view==="desligados"))state.view="estoque";
     document.querySelectorAll("#menu button").forEach(b=>b.classList.toggle("active",b.dataset.view===state.view));
     const m=document.getElementById("main");
@@ -1032,7 +1034,7 @@ function formCadastroColab(colab){
     +'<div class="mfield"><label>Contato / Telefone</label>'
     +'<input id="cc_contato" value="'+(c.contato||"")+'"></div>'
     +'<div class="mfield"><label>CPF <span class="req">*</span></label>'
-    +'<input id="cc_cpf" value="'+(c.cpf||"")+" placeholder=\"000.000.000-00\">"+"</div>'"
+    +'<input id="cc_cpf" type="text" inputmode="numeric" maxlength="14" value="'+(c.cpf||"")+'" placeholder="000.000.000-00"></div>'
     +'<div class="mfield"><label>Status</label>'
     +'<select id="cc_ativo"><option value="true" '+(c.ativo!==false?"selected":"")+'>Ativo</option>'
     +'<option value="false" '+(c.ativo===false?"selected":"")+'>Inativo</option></select></div>'
@@ -1052,6 +1054,8 @@ function formCadastroColab(colab){
     {label:"Salvar",cls:"primary",act:async function(){
       var nome=(document.getElementById("cc_nome")||{}).value||"";
       if(!nome.trim()){toast("Nome \u00e9 obrigat\u00f3rio","erro");return;}
+      var cpfDig=((document.getElementById("cc_cpf")||{}).value||"").replace(/\D/g,'');
+      if(cpfDig.length!==11){toast("Informe um CPF v\u00e1lido (11 d\u00edgitos) \u2014 \u00e9 usado para conferir a identidade na entrega de EPI","erro");return;}
       var obj={
         id:c.id||uid(),nome:nome.trim(),
         cpf:(document.getElementById("cc_cpf")||{}).value||"",
@@ -1073,6 +1077,16 @@ function formCadastroColab(colab){
       state.colab=obj.nome;render();
     }}
   ]);
+  setTimeout(function(){
+    var ci=document.getElementById("cc_cpf");
+    if(ci)ci.addEventListener("input",function(){
+      var v=ci.value.replace(/\D/g,'').slice(0,11);
+      if(v.length>9)ci.value=v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/,'$1.$2.$3-$4');
+      else if(v.length>6)ci.value=v.replace(/(\d{3})(\d{3})(\d{1,3})/,'$1.$2.$3');
+      else if(v.length>3)ci.value=v.replace(/(\d{3})(\d{1,3})/,'$1.$2');
+      else ci.value=v;
+    });
+  },80);
   if(!isNew){
     preSelect("cc_camisa",c.tamCamisa);preSelect("cc_calca",c.tamCalca);
     preSelect("cc_bermuda",c.tamBermuda);preSelect("cc_bota",c.tamBota);
@@ -1245,6 +1259,105 @@ function viewRel(){
     <div class="stat amber"><div class="l">Colaboradores</div><div class="v">${Object.keys(porColab).length}</div><div class="m">atendidos</div></div>
   </div>
   ${breakdown}`;
+}
+
+/* ================= UI: TOAST + MODAL ================= */
+function toast(msg,type){
+  var box=document.getElementById("toasts");
+  if(!box){console.log("toast:",msg);return;}
+  var t=document.createElement("div");
+  t.className="toast"+(type?(" "+type):"");
+  t.textContent=String(msg==null?"":msg);
+  box.appendChild(t);
+  setTimeout(function(){
+    t.style.transition="opacity .3s, transform .3s";
+    t.style.opacity="0";t.style.transform="translateX(40px)";
+    setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},320);
+  },3000);
+}
+
+function openModal(title, bodyHTML, buttons){
+  var overlay=document.getElementById("overlay");
+  var modal=document.getElementById("modal");
+  if(!overlay||!modal)return;
+  modal.innerHTML="";
+  var head=document.createElement("div");head.className="modal-head";
+  var h3=document.createElement("h3");h3.textContent=title||"";
+  var x=document.createElement("button");x.className="x";x.innerHTML="&times;";
+  x.onclick=function(){closeModal();};
+  head.appendChild(h3);head.appendChild(x);
+  var body=document.createElement("div");body.className="modal-body";
+  body.innerHTML=bodyHTML||"";
+  modal.appendChild(head);modal.appendChild(body);
+  var list=buttons||[];
+  if(list.length){
+    var foot=document.createElement("div");foot.className="modal-foot";
+    list.forEach(function(b){
+      var btn=document.createElement("button");
+      btn.className="btn "+(b.cls||"ghost")+" sm";
+      btn.innerHTML=b.label||"";
+      btn.onclick=function(){
+        try{var r=b.act&&b.act();if(r&&typeof r.then==="function")r.catch(function(e){console.error(e);});}
+        catch(e){console.error(e);}
+      };
+      foot.appendChild(btn);
+    });
+    modal.appendChild(foot);
+  }
+  overlay.classList.add("show");
+  overlay.onclick=function(e){if(e.target===overlay)closeModal();};
+}
+
+function closeModal(){
+  if(typeof _wz_pararCamera==="function"){try{_wz_pararCamera();}catch(e){}}
+  var overlay=document.getElementById("overlay");
+  var modal=document.getElementById("modal");
+  if(overlay){overlay.classList.remove("show");overlay.onclick=null;}
+  if(modal)modal.innerHTML="";
+}
+
+function confirmModal(title, msgHTML, confirmLabel){
+  return new Promise(function(resolve){
+    var done=false;
+    function finish(v){if(done)return;done=true;closeModal();resolve(v);}
+    openModal(title,
+      '<div style="font-size:14px;line-height:1.55;color:var(--txt)">'+(msgHTML||"")+'</div>',
+      [{label:"Cancelar",cls:"ghost",act:function(){finish(false);}},
+       {label:confirmLabel||"Confirmar",cls:"danger",act:function(){finish(true);}}]);
+    var overlay=document.getElementById("overlay");
+    if(overlay)overlay.onclick=function(e){if(e.target===overlay)finish(false);};
+    var x=document.querySelector(".modal-head .x");
+    if(x)x.onclick=function(){finish(false);};
+  });
+}
+
+/* ================= EXPORTAR CSV ================= */
+function exportCSV(){
+  try{
+    var dom=state.dom;
+    var rows=MOVS.filter(function(m){return m.dom===dom;});
+    if(_repRange&&_repRange.start&&_repRange.end){
+      rows=rows.filter(function(m){return m.data>=_repRange.start&&m.data<=_repRange.end;});
+    }
+    rows=rows.slice().sort(function(a,b){return a.data<b.data?1:(a.data>b.data?-1:0);});
+    if(!rows.length){toast("Não há movimentações para exportar.","warn");return;}
+    var head=["Data","Tipo","Produto","Parte/Colaborador","Quantidade","Tamanho","Cor","Custo Unit.","Liberado Por","Observacoes"];
+    function cell(v){v=(v==null?"":String(v));if(/[";\n\r]/.test(v))v='"'+v.replace(/"/g,'""')+'"';return v;}
+    var lines=[head.join(";")];
+    rows.forEach(function(m){
+      var p=(typeof PRODUTOS!=="undefined")?PRODUTOS.find(function(x){return x.id===m.produtoId;}):null;
+      lines.push([m.data,(m.tipo==="entrada"?"Entrada":"Saída"),p?p.descricao:m.produtoId,
+        m.parte||"",m.qtd,m.tamanho||"",m.cor||"",m.custoUnit||0,m.liberadoPor||"",m.obs||""].map(cell).join(";"));
+    });
+    var csv="\ufeff"+lines.join("\r\n");
+    var blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url;a.download="movimentacoes_"+dom+"_"+today()+".csv";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1500);
+    toast("CSV exportado.","ok");
+  }catch(e){toast("Erro ao exportar CSV: "+e.message,"erro");}
 }
 
 /* ================= WIRE ================= */
@@ -1448,7 +1561,7 @@ function _wz_step1(prods,prefColab){
     +'</div>';
   openModal("Nova Entrega de EPI \u2014 Etapa 1 de 4",body,[
     {label:"Cancelar",cls:"ghost",act:function(){closeModal();}},
-    {label:"Pr&oacute;ximo: PIN \u2192",cls:"primary",act:_wz_validarDados}
+    {label:"Pr&oacute;ximo: CPF \u2192",cls:"primary",act:_wz_validarDados}
   ]);
   setTimeout(function(){
     var ps=document.getElementById("ew_prod"),
@@ -1705,12 +1818,58 @@ async function _wz_finalizar(){
   var wzMov={id:uid(),_t:Date.now(),produtoId:p.id,dom:"safety",tipo:"saida",
     data:d.data,qtd:d.qtd,tamanho:d.tam,cor:"",parte:d.colab,liberadoPor:d.lib,obs:d.obs,
     temRecibo:true,fotoUrl:fotoSnap,assinUrl:assinSnap};
-  const r_w=await persistMov(wzMov);if(!r_w){toast("Erro ao salvar entrega","erro");return;}
+  // Persistir sem as imagens (JSONP/GET não comporta base64 grande; o backend não guarda imagens)
+  var movPersist=Object.assign({},wzMov);delete movPersist.fotoUrl;delete movPersist.assinUrl;
+  const r_w=await persistMov(movPersist);if(!r_w){toast("Erro ao salvar entrega","erro");return;}
   MOVS.push(wzMov);
   closeModal();
   toast("Entrega registrada: "+d.qtd+"× "+p.descricao+" → "+d.colab,"ok");
-  await _wz_gerarPDF(d,p,fotoSnap,assinSnap);
+  var reciboHtml=await _wz_gerarPDF(d,p,fotoSnap,assinSnap);
+  salvarReciboDrive(wzMov,reciboHtml);
   state.dom="safety";state.view="colaboradores";state.colab=d.colab;render();
+}
+
+/* ── Salva o comprovante como PDF no Drive (via backend) e grava reciboUrl ── */
+async function salvarReciboDrive(mov, html){
+  if(!html){return;}
+  try{
+    driveSetStatus("syncing");
+    var nomeArq='Comprovante_EPI_'+String(mov.parte||'').replace(/\s+/g,'_')+'_'+mov.data+'_'+Date.now();
+    var body=JSON.stringify({
+      action:"saveRecibo",
+      token:getToken(),
+      payload:{movId:mov.id,html:html,nomeArq:nomeArq,folderId:DRIVE_FOLDER_EPI}
+    });
+    // POST (no-cors) — o payload com foto/assinatura é grande demais para JSONP/GET
+    await fetch(APPS_SCRIPT_URL,{
+      method:"POST",mode:"no-cors",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:body
+    });
+    // Recupera a URL gravada na planilha (o PDF leva alguns segundos para ser gerado)
+    var url=await _pollRecibo(mov.id,6,2500);
+    if(url){
+      mov.reciboUrl=url;mov.temRecibo=true;
+      driveSetStatus("ok");
+      toast("Comprovante salvo no Drive ✓","ok");
+      if(state.view==="colaboradores")render();
+    }else{
+      driveSetStatus("ok");
+      toast("Comprovante enviado ao Drive (processando). Atualize em instantes.","warn");
+    }
+  }catch(e){
+    console.error("salvarReciboDrive:",e);
+    driveSetStatus("error");
+    toast("Falha ao salvar no Drive: "+e.message,"erro");
+  }
+}
+async function _pollRecibo(movId,tries,delay){
+  for(var i=0;i<tries;i++){
+    await new Promise(function(r){setTimeout(r,delay);});
+    var res=await api("getRecibo",{movId:movId},true);
+    if(res&&res.ok&&res.url)return res.url;
+  }
+  return null;
 }
 
 async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
@@ -1801,24 +1960,30 @@ async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
   var win=window.open(url,'_blank','width=820,height=900,scrollbars=yes');
   if(!win){var a=document.createElement('a');a.href=url;a.download='Recibo_EPI_'+d.colab.replace(/\s+/g,'_')+'_'+d.data+'.html';a.click();}
   setTimeout(function(){URL.revokeObjectURL(url);},60000);
-  // Salvar no Google Drive
-  var nomeArq='Recibo_EPI_'+d.colab.replace(/\s+/g,'_')+'_'+d.data+'_'+Date.now()+'.html';
-  driveUploadComprovante(nomeArq,docHtml).then(function(r){
-    if(r)toast("Comprovante salvo no Drive ✓","ok");
-    else toast("Comprovante aberto (Drive indisponível)","warn");
-  });
+  return docHtml;
 }
 
 async function reemitirRecibo(movId){
   var mv=MOVS.find(function(x){return x.id===movId;});
   if(!mv){toast("Movimentação não encontrada","erro");return;}
+  // 1) Se já existe o PDF salvo no Drive, abre direto
+  if(mv.reciboUrl){window.open(mv.reciboUrl,"_blank");return;}
+  // 2) Tenta buscar a URL no servidor (pode ter sido gerada em outra sessão)
+  var res=await api("getRecibo",{movId:movId},true);
+  if(res&&res.ok&&res.url){mv.reciboUrl=res.url;window.open(res.url,"_blank");return;}
+  // 3) Fallback: regenera localmente (só há foto/assinatura na sessão em que foi criado)
   var p=PRODUTOS.find(function(x){return x.id===mv.produtoId;});
   if(!p){toast("Produto não encontrado","erro");return;}
   var colabObj=COLABORADORES.find(function(c){return c.nome===mv.parte;});
   var d={colab:mv.parte,prod:mv.produtoId,qtd:mv.qtd,lib:mv.liberadoPor||"",
     data:mv.data,tam:mv.tamanho||"",obs:mv.obs||"",
     cpf:colabObj?colabObj.cpf||"":""};
-  await _wz_gerarPDF(d,p,mv.fotoUrl||null,mv.assinUrl||null);
+  if(!mv.fotoUrl&&!mv.assinUrl){
+    toast("PDF do Drive ainda não disponível — gerando comprovante a partir dos dados.","warn");
+  }
+  var html=await _wz_gerarPDF(d,p,mv.fotoUrl||null,mv.assinUrl||null);
+  // Se ainda não há recibo salvo, tenta salvar agora no Drive
+  if(html&&!mv.reciboUrl)salvarReciboDrive(mv,html);
 }
 
 async function delMov(id){
