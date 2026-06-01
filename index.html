@@ -224,7 +224,7 @@ const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","
 const MESES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const ALERTA_DIAS=15;
 /* ── Google Sheets / Apps Script ── */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbySsTW81d7uHKp7No4xKZyTt6EKFC7YRxOWPR_Y4gjAm2OrNhgMhXDy5xtpkxzFVLV4sA/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNPKv7inxLzI1BU1H_odWAqQDWvN9C80usTDEm9Vm9RzE8KaTwo1eL-1yzwphXZCATVg/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
 const DRIVE_FOLDER_EPI = "1xIq3muw068guiHAPAEe17NA_pyjUTpPg";
 let   DRIVE_STATUS = "idle";
 
@@ -410,6 +410,18 @@ function selProd(){return PRODUTOS.find(p=>p.id===state.sel)||null;}
 function atual(pid){return movOf(pid).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
 function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>(m.tamanho||"")===(tam||"")&&(m.cor||"")===(cor||"")).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
 function custoUnit(pid){const e=movOf(pid).filter(m=>m.tipo==="entrada"&&m.custoUnit>0);return e.length?e[e.length-1].custoUnit:0;}
+function caAtualProduto(pid){
+  if(!pid)return"";
+  var ents=movOf(pid).filter(function(m){return m.tipo==="entrada";})
+    .sort(function(a,b){return (b._t||0)-(a._t||0);});
+  for(var i=0;i<ents.length;i++){
+    var m=ents[i];
+    if(m.ca)return m.ca;
+    if(m.obs){var mm=String(m.obs).match(/C\.?A\.?\s*[:nº]*\s*([0-9][0-9.\-\/]*)/i);if(mm)return mm[1];}
+  }
+  var p=PRODUTOS.find(function(x){return x.id===pid;});
+  return (p&&p.ca)||"";
+}
 function corDot(c){if(!c)return"";return`<span class="cdot" style="background:${COR_HEX[c]||"#bbb"}"></span>`;}
 function colabListaAtivos(dom){
   const fromSheets=COLABORADORES.filter(c=>c.ativo!==false).map(c=>c.nome);
@@ -1464,6 +1476,9 @@ function formMov(tipo){
   body+=tamOpts+corOpts+`<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="m_qtd" min="1" step="1" value="1"></div>`;
   body+=isSai?`<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="m_lib" placeholder="Responsável"></div><div class="mfield"><label>Disponível</label><input id="m_disp" readonly value="—"></div>`
               :`<div class="mfield"><label>Custo unitário (R$)</label><input type="number" id="m_cu" min="0" step="0.01" placeholder="0,00"></div><div class="mfield"><label>Usuário</label><input id="m_user" placeholder="Quem lança"></div>`;
+  if(!isSai&&state.dom==="safety"){
+    body+=`<div class="mfield full"><label>C.A. do EPI <span class="req">*</span></label><input id="m_ca" inputmode="numeric" placeholder="Nº do Certificado de Aprovação" value="${esc(p.ca||"")}"></div>`;
+  }
   body+=`<div class="mfield full"><label>Observações</label><input id="m_obs" placeholder="${isSai?"Ex: troca…":"Ex: nota fiscal, lote…"}"></div></div>`;
   openModal((isSai?"Saída":"Entrada")+" · "+esc(p.descricao),body,
     [{label:"Cancelar",cls:"ghost",act:closeModal},{label:isSai?"Registrar Saída":"Registrar Entrada",cls:isSai?"primary":"green",act:()=>submitMov(tipo)}]);
@@ -1496,10 +1511,18 @@ async function submitMov(tipo){
     MOVS.push(novaMov);
     closeModal();toast(`Saída: ${qtd}× ${p.descricao} → ${parte}`,"ok");render();
   }else{
-    var novaEnt={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"entrada",data,qtd,tamanho:tam,cor,parte:parte||"—",custoUnit:Number(val("m_cu"))||0,usuario:val("m_user").trim(),obs:val("m_obs").trim()};
+    var caVal="", obsEnt=val("m_obs").trim();
+    if(state.dom==="safety"){
+      caVal=val("m_ca").trim();
+      if(!caVal){toast("Informe o C.A. do EPI","erro");return;}
+      obsEnt=("C.A. "+caVal)+(obsEnt?(" — "+obsEnt):"");
+    }
+    var novaEnt={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"entrada",data,qtd,tamanho:tam,cor,parte:parte||"—",custoUnit:Number(val("m_cu"))||0,usuario:val("m_user").trim(),obs:obsEnt,ca:caVal};
     const r_e=await persistMov(novaEnt);if(!r_e)return;
     MOVS.push(novaEnt);
-    closeModal();toast(`Entrada: ${qtd}× ${p.descricao}`,"ok");render();
+    // Memoriza o último C.A. no produto para pré-preencher próximas entradas
+    if(caVal){p.ca=caVal;}
+    closeModal();toast(`Entrada: ${qtd}× ${p.descricao}`+(caVal?` (C.A. ${caVal})`:""),"ok");render();
   }
 }
 
@@ -1813,6 +1836,7 @@ async function _wz_finalizar(){
   var p=PRODUTOS.find(function(x){return x.id===d.prod;});
   var colabObjFin=COLABORADORES.find(function(x){return x.nome===d.colab;});
   if(colabObjFin)d.cpf=colabObjFin.cpf||"";
+  d.ca=caAtualProduto(p&&p.id);
   var fotoSnap=EPI_WZ.fotoDataUrl||null;
   var assinSnap=EPI_WZ.assinDataUrl||null;
   var wzMov={id:uid(),_t:Date.now(),produtoId:p.id,dom:"safety",tipo:"saida",
@@ -1883,6 +1907,8 @@ async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
     :'<div class="cell"><label>Tamanho</label><div class="v">—</div></div>';
   var obsCell=d.obs?'<div class="cell full"><label>Observações</label><div class="v">'+d.obs+'</div></div>':'';
   var cpfCell=d.cpf?'<div class="cell"><label>CPF</label><div class="v">'+d.cpf+'</div></div>':'';
+  var caEPI=d.ca||caAtualProduto(p&&p.id);
+  var caCell=caEPI?'<div class="cell"><label>C.A. (Certificado de Aprovação)</label><div class="v">'+caEPI+'</div></div>':'';
   var fotoBlock=foto
     ?'<img src="'+foto+'" alt="Foto" style="width:160px;height:120px;object-fit:cover;display:block">'
     :'<div style="width:160px;height:120px;display:flex;align-items:center;justify-content:center;color:#8b94a3;font-size:12px;font-style:italic">Sem foto</div>';
@@ -1930,6 +1956,7 @@ async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
     +'<div style="margin-bottom:16px"><div class="sec-title">Dados do EPI Entregue</div>'
     +'<div class="grid2">'
     +'<div class="cell full"><label>Produto / EPI</label><div class="v">'+p.descricao+'</div></div>'
+    +caCell
     +tamCell
     +'<div class="cell"><label>Quantidade</label><div class="v">'+d.qtd+' '+(p.unidade||'UN')+'</div></div>'
     +'<div class="cell"><label>Data de Entrega</label><div class="v">'+fmtD(d.data)+'</div></div>'
@@ -1977,7 +2004,7 @@ async function reemitirRecibo(movId){
   var colabObj=COLABORADORES.find(function(c){return c.nome===mv.parte;});
   var d={colab:mv.parte,prod:mv.produtoId,qtd:mv.qtd,lib:mv.liberadoPor||"",
     data:mv.data,tam:mv.tamanho||"",obs:mv.obs||"",
-    cpf:colabObj?colabObj.cpf||"":""};
+    cpf:colabObj?colabObj.cpf||"":"",ca:caAtualProduto(mv.produtoId)};
   if(!mv.fotoUrl&&!mv.assinUrl){
     toast("PDF do Drive ainda não disponível — gerando comprovante a partir dos dados.","warn");
   }
