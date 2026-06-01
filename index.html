@@ -130,6 +130,40 @@
   .colab-select-wrap{padding:14px 16px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   .colab-select-wrap select{border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-family:var(--body);font-size:14px;min-width:280px;background:#fff;color:var(--txt)}
   .colab-select-wrap select:focus{outline:none;border-color:var(--blue)}
+  /* ===== Relatórios visuais ===== */
+  .rep-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:760px){.rep-grid{grid-template-columns:1fr}}
+  .itembar{padding:11px 14px;border-bottom:1px solid var(--line-soft)}
+  .itembar:last-child{border-bottom:none}
+  .itembar .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px}
+  .itembar .nm{font-weight:600;font-size:13.5px;color:var(--txt);display:flex;align-items:center;gap:7px}
+  .itembar .nm .ca{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--blue);background:var(--blue-l);padding:1px 6px;border-radius:9px}
+  .itembar .sd{font-family:var(--disp);font-weight:800;font-size:15px}
+  .itembar .sd small{font-size:10.5px;color:var(--txt-faint);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+  .track{position:relative;height:26px;border-radius:6px;background:var(--bg);overflow:hidden;display:flex}
+  .track .bar{height:100%;display:flex;align-items:center;justify-content:flex-end;padding:0 7px;font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;transition:width .5s cubic-bezier(.4,0,.2,1);min-width:0;white-space:nowrap}
+  .track .bar.ent{background:linear-gradient(90deg,#1f9d55,#27b863)}
+  .track .bar.sai{background:linear-gradient(90deg,#d23b30,#e8554a)}
+  .itembar .meta{display:flex;gap:16px;margin-top:6px;font-size:11.5px;color:var(--txt-dim)}
+  .itembar .meta b{font-family:var(--mono)}
+  .legend{display:flex;gap:16px;align-items:center;font-size:11.5px;color:var(--txt-dim);margin-left:auto}
+  .legend .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .legend .dot.ent{background:#27b863}.legend .dot.sai{background:#e8554a}
+  .repsearch{border:1px solid var(--line);border-radius:7px;padding:8px 12px;font-family:var(--body);font-size:13.5px;background:#fff;color:var(--txt);min-width:200px}
+  .repsearch:focus{outline:none;border-color:var(--blue)}
+  .miniflow{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;flex-wrap:wrap}
+  .miniflow .pill{padding:2px 9px;border-radius:12px;font-weight:700;border:1px solid var(--line)}
+  .miniflow .pill.ini{background:#eef1f6;color:var(--txt-dim)}
+  .miniflow .pill.ent{background:var(--green-bg);color:var(--green)}
+  .miniflow .pill.sai{background:var(--red-bg);color:var(--red)}
+  .miniflow .pill.fim{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .miniflow .op{color:var(--txt-faint);font-weight:700}
+  .donut-wrap{display:flex;align-items:center;gap:18px;padding:16px}
+  .barcol{display:flex;align-items:flex-end;gap:10px;height:170px;padding:16px 14px 6px}
+  .barcol .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end}
+  .barcol .col .stack{width:100%;max-width:46px;border-radius:5px 5px 0 0;transition:height .5s cubic-bezier(.4,0,.2,1);position:relative}
+  .barcol .col .cap{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--txt)}
+  .barcol .col .xl{font-size:10.5px;color:var(--txt-faint);text-align:center;line-height:1.2}
 </style>
 </head>
 <body>
@@ -436,10 +470,28 @@ function yearRange(y){return{start:`${y}-01-01`,end:`${y}-12-31`};}
 function weekOfYear(dateStr){const d=new Date(dateStr);const start=new Date(d.getFullYear(),0,1);return Math.ceil(((d-start)/86400000+start.getDay()+1)/7);}
 function weeksInYear(y){const allWeeks=[];let d=new Date(y,0,1);while(d.getFullYear()===y){const w=weekOfYear(d.toISOString().slice(0,10));if(!allWeeks.find(x=>x.w===w)){const monday=new Date(d);const sunday=new Date(d);sunday.setDate(sunday.getDate()+(6-sunday.getDay()));if(sunday.getFullYear()>y)sunday.setFullYear(y,11,31);allWeeks.push({w,label:`W${String(w).padStart(2,"0")}`,start:monday.toISOString().slice(0,10),end:sunday.toISOString().slice(0,10)});}d.setDate(d.getDate()+1);}return allWeeks;}
 function aggregate(dom,start,end){const ent=MOVS.filter(m=>m.tipo==="entrada"&&m.dom===dom&&m.data>=start&&m.data<=end);const sai=MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom&&m.data>=start&&m.data<=end);return{ent,sai,qtdEnt:ent.reduce((s,e)=>s+e.qtd,0),qtdSai:sai.reduce((s,e)=>s+e.qtd,0),valEnt:ent.reduce((s,e)=>s+e.qtd*(e.custoUnit||0),0)};}
+/* Saldo de um produto ANTES de uma data (saldo inicial do período) */
+function saldoAntes(pid,start){return movOf(pid).filter(m=>m.data<start).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
+/* Entradas/saídas de um produto dentro do período */
+function movPeriodo(pid,start,end){const ms=movOf(pid).filter(m=>m.data>=start&&m.data<=end);return{ent:ms.filter(m=>m.tipo==="entrada").reduce((s,m)=>s+m.qtd,0),sai:ms.filter(m=>m.tipo==="saida").reduce((s,m)=>s+m.qtd,0)};}
+/* Linha completa por item no período: saldo inicial, entradas, saídas, saldo final */
+function itemPeriodo(pid,start,end){const ini=saldoAntes(pid,start);const{ent,sai}=movPeriodo(pid,start,end);return{ini:ini,ent:ent,sai:sai,fim:ini+ent-sai};}
+/* Saldo acumulado de um produto ATÉ uma data (inclusive) — para curva de evolução */
+function saldoAteData(pid,date){return movOf(pid).filter(m=>m.data<=date).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
+
+/* ===== Estoque mínimo (configurável, salvo no navegador) ===== */
+const KEY_MIN="smg6_estoque_min";
+let ESTOQUE_MIN={};
+function carregarMin(){try{ESTOQUE_MIN=JSON.parse(localStorage.getItem(KEY_MIN)||"{}")||{};}catch(e){ESTOQUE_MIN={};}}
+function salvarMin(){try{localStorage.setItem(KEY_MIN,JSON.stringify(ESTOQUE_MIN));}catch(e){}}
+function getMin(pid){return Number(ESTOQUE_MIN[pid])||0;}
+function setMin(pid,v){v=Number(v)||0;if(v>0)ESTOQUE_MIN[pid]=v;else delete ESTOQUE_MIN[pid];salvarMin();}
+/* Itens em alerta: saldo atual <= mínimo definido (mínimo > 0) */
+function itensAbaixoMin(dom){return prodOf(dom).map(p=>({p:p,saldo:atual(p.id),min:getMin(p.id)})).filter(x=>x.min>0&&x.saldo<=x.min).sort((a,b)=>(a.saldo-a.min)-(b.saldo-b.min));}
 
 /* ================= STATE ================= */
 let PRODUTOS=[],MOVS=[],DESLIGADOS=[],COLABORADORES=[];
-let state={dom:"safety",view:"estoque",sel:null,colab:null,histColab:null,rep:"semana",repWeek:null,repMonth:"",repYear:0,repStart:"",repEnd:""};
+let state={dom:"safety",view:"estoque",sel:null,colab:null,histColab:null,rep:"semana",repWeek:null,repMonth:"",repYear:0,repStart:"",repEnd:"",repItem:"",repBusca:""};
 let _repRange={start:"",end:""};
 
 /* ================= STORAGE (Google Sheets) ================= */
@@ -509,6 +561,7 @@ function showLogin(){
 }
 
 async function loadAll(){
+  carregarMin();
   driveSetStatus("syncing");
   const r = await api("getAll", null, true);
   if(!r.ok){
@@ -1123,130 +1176,25 @@ function viewRel(){
   if(!state.repYear)state.repYear=curYear;
   if(!state.repMonth)state.repMonth=todayStr.slice(0,7);
 
-  let start,end,breakdown="",periodoLbl="",weekOptions="";
+  let start,end,periodoLbl="",weekOptions="",wkLbl="";
 
   if(state.rep==="semana"){
-    // Semanas do ano
     const wks=weeksInYear(state.repYear);
-    // Semana corrente default
     const curW=weekOfYear(todayStr);
     const selW=state.repWeek||curW;
     const wkObj=wks.find(w=>w.w===selW)||wks[wks.length-1];
-    start=wkObj.start;end=wkObj.end;
+    start=wkObj.start;end=wkObj.end;wkLbl=wkObj.label;
     periodoLbl=`${wkObj.label} — ${fmtD(wkObj.start)} a ${fmtD(wkObj.end)}`;
     weekOptions=`<div class="fg"><label>Ano</label><input type="number" id="rep_year" value="${state.repYear}" min="2020" max="2100" style="width:100px"></div>
       <div class="fg"><label>Semana</label><select id="rep_week">${wks.map(w=>`<option value="${w.w}" ${w.w===selW?"selected":""}>${w.label} · ${fmtD(w.start)} a ${fmtD(w.end)}</option>`).join("")}</select></div>`;
-
-    const {ent:entW,sai:saiW}=aggregate(dom,start,end);
-    // Movimentação por item na semana
-    const movItemW={};
-    prodOf(dom).forEach(p=>{
-      const eQtd=entW.filter(m=>m.produtoId===p.id).reduce((s,m)=>s+m.qtd,0);
-      const sQtd=saiW.filter(m=>m.produtoId===p.id).reduce((s,m)=>s+m.qtd,0);
-      if(eQtd||sQtd)movItemW[p.descricao]={ent:eQtd,sai:sQtd};
-    });
-    const movItemRowsW=Object.entries(movItemW).sort((a,b)=>a[0].localeCompare(b[0],"pt-BR"))
-      .map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num qpos">${v.ent?"+"+v.ent:"—"}</td><td class="num qneg">${v.sai?"−"+v.sai:"—"}</td></tr>`).join("")
-      || `<tr><td colspan="3"><div class="empty">Sem movimentações.</div></td></tr>`;
-    // Itens com saídas na semana
-    const porItemW={};
-    saiW.forEach(s=>{const p=PRODUTOS.find(x=>x.id===s.produtoId);const k=p?p.descricao:"?";porItemW[k]=(porItemW[k]||0)+s.qtd;});
-    const itemRowsW=Object.entries(porItemW).sort((a,b)=>b[1]-a[1]).map(([k,q],i)=>`<tr><td><span style="font-size:11px;color:var(--txt-faint);margin-right:6px">${i+1}°</span>${esc(k)}</td><td class="num"><b>${q}</b></td></tr>`).join("") || `<tr><td colspan="2"><div class="empty">Sem saídas.</div></td></tr>`;
-    // Colaboradores ofensores (mais de 1 item igual) — só Safety
-    let ofBlock="";
-    if(dom==="safety"){
-      const colabOfW={};
-      saiW.forEach(s=>{
-        const p=PRODUTOS.find(x=>x.id===s.produtoId);const item=p?p.descricao:"?";
-        if(!colabOfW[s.parte])colabOfW[s.parte]={};
-        colabOfW[s.parte][item]=(colabOfW[s.parte][item]||0)+s.qtd;
-      });
-      const ofensores=[];
-      Object.entries(colabOfW).forEach(([c,map])=>{Object.entries(map).forEach(([item,qtd])=>{if(qtd>1)ofensores.push({c,item,qtd});});});
-      ofensores.sort((a,b)=>b.qtd-a.qtd);
-      const ofRows=ofensores.map(o=>`<tr><td><b>${esc(o.c)}</b></td><td>${esc(o.item)}</td><td class="num qneg">${o.qtd}×</td></tr>`).join("") || `<tr><td colspan="3"><div class="empty">Nenhum ofensor.</div></td></tr>`;
-      ofBlock=`<div class="panel"><div class="panel-bar"><h3>Ofensores — +1 item igual</h3></div>
-        <div class="scroll-y" style="max-height:300px"><table><thead><tr><th>Colaborador</th><th>Item</th><th class="num">Qtd</th></tr></thead><tbody>${ofRows}</tbody></table></div></div>`;
-    }
-
-    breakdown=`
-    <div class="panel"><div class="panel-bar"><h3>Movimentação por Item — ${wkObj.label}</h3></div>
-      <div class="scroll-y" style="max-height:300px"><table>
-        <thead><tr><th>Produto</th><th class="num">Entradas</th><th class="num">Saídas</th></tr></thead>
-        <tbody>${movItemRowsW}</tbody>
-      </table></div></div>
-    <div style="display:grid;grid-template-columns:1fr${dom==="safety"?" 1fr":""};gap:12px">
-      <div class="panel"><div class="panel-bar"><h3>Itens com Saídas — ${wkObj.label}</h3></div>
-        <div class="scroll-y" style="max-height:280px"><table><thead><tr><th>Produto</th><th class="num">Qtd</th></tr></thead><tbody>${itemRowsW}</tbody></table></div></div>
-      ${ofBlock}
-    </div>`;
-
   }else if(state.rep==="mes"){
     const r=monthRange(state.repMonth);start=r.start;end=r.end;
     periodoLbl=`${MESES_FULL[Number(state.repMonth.split("-")[1])-1]} / ${state.repMonth.split("-")[0]}`;
     weekOptions=`<div class="fg"><label>Mês</label><input type="month" id="rep_month" value="${state.repMonth}"></div>`;
-
-    const {ent:entM,sai:saiM}=aggregate(dom,start,end);
-    // Movimentação por item no mês
-    const movItemM={};
-    prodOf(dom).forEach(p=>{
-      const eQtd=entM.filter(m=>m.produtoId===p.id).reduce((s,m)=>s+m.qtd,0);
-      const sQtd=saiM.filter(m=>m.produtoId===p.id).reduce((s,m)=>s+m.qtd,0);
-      if(eQtd||sQtd)movItemM[p.descricao]={ent:eQtd,sai:sQtd};
-    });
-    const movItemRowsM=Object.entries(movItemM).sort((a,b)=>a[0].localeCompare(b[0],"pt-BR"))
-      .map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num qpos">${v.ent?"+"+v.ent:"—"}</td><td class="num qneg">${v.sai?"−"+v.sai:"—"}</td></tr>`).join("")
-      || `<tr><td colspan="3"><div class="empty">Sem movimentações.</div></td></tr>`;
-    const porItemM={};
-    saiM.forEach(s=>{const p=PRODUTOS.find(x=>x.id===s.produtoId);const k=p?p.descricao:"?";porItemM[k]=(porItemM[k]||0)+s.qtd;});
-    const top10Items=Object.entries(porItemM).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    const itemRowsM=top10Items.map(([k,q],i)=>`<tr><td><span style="font-size:11px;color:var(--txt-faint);margin-right:6px">${i+1}°</span>${esc(k)}</td><td class="num"><b>${q}</b></td></tr>`).join("") || `<tr><td colspan="2"><div class="empty">Sem saídas.</div></td></tr>`;
-
-    const porColabM={};
-    saiM.forEach(s=>{if(s.parte)porColabM[s.parte]=(porColabM[s.parte]||0)+s.qtd;});
-    const top10Colab=Object.entries(porColabM).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    const colabRowsM=top10Colab.map(([k,q],i)=>`<tr><td><span style="font-size:11px;color:var(--txt-faint);margin-right:6px">${i+1}°</span><b>${esc(k)}</b></td><td class="num">${q}</td></tr>`).join("") || `<tr><td colspan="2"><div class="empty">Sem dados.</div></td></tr>`;
-
-    const colabBlockM=dom==="safety"?`<div class="panel"><div class="panel-bar"><h3>Top 10 — Mais Retiradas por Colaborador</h3></div>
-        <div class="scroll-y" style="max-height:340px"><table><thead><tr><th>Colaborador</th><th class="num">Itens</th></tr></thead><tbody>${colabRowsM}</tbody></table></div></div>`:"";
-
-    breakdown=`
-    <div class="panel"><div class="panel-bar"><h3>Movimentação por Item — ${periodoLbl}</h3></div>
-      <div class="scroll-y" style="max-height:300px"><table>
-        <thead><tr><th>Produto</th><th class="num">Entradas</th><th class="num">Saídas</th></tr></thead>
-        <tbody>${movItemRowsM}</tbody>
-      </table></div></div>
-    <div style="display:grid;grid-template-columns:1fr${dom==="safety"?" 1fr":""};gap:12px">
-      <div class="panel"><div class="panel-bar"><h3>Top 10 — Itens Mais Retirados</h3></div>
-        <div class="scroll-y" style="max-height:340px"><table><thead><tr><th>Produto</th><th class="num">Qtd</th></tr></thead><tbody>${itemRowsM}</tbody></table></div></div>
-      ${colabBlockM}
-    </div>`;
-
   }else if(state.rep==="ano"){
     const r=yearRange(state.repYear);start=r.start;end=r.end;
     periodoLbl=`Ano ${state.repYear}`;
     weekOptions=`<div class="fg"><label>Ano</label><input type="number" id="rep_year" value="${state.repYear}" min="2020" max="2100" style="width:100px"></div>`;
-
-    // Por item: entradas, saídas e saldo final
-    const prodsDom=prodOf(dom);
-    const itemAnoRows=prodsDom.map(p=>{
-      const entAno=MOVS.filter(m=>m.tipo==="entrada"&&m.produtoId===p.id&&m.data>=start&&m.data<=end).reduce((s,m)=>s+m.qtd,0);
-      const saiAno=MOVS.filter(m=>m.tipo==="saida"&&m.produtoId===p.id&&m.data>=start&&m.data<=end).reduce((s,m)=>s+m.qtd,0);
-      const saldoFinal=atual(p.id);
-      return `<tr>
-        <td><b>${esc(p.descricao)}</b></td>
-        <td class="num qpos">+${entAno}</td>
-        <td class="num qneg">−${saiAno}</td>
-        <td class="num" style="font-weight:600;${saldoFinal<=0?"color:var(--red)":"color:var(--green)"}">${saldoFinal}</td>
-      </tr>`;
-    }).join("") || `<tr><td colspan="4"><div class="empty">Sem produtos.</div></td></tr>`;
-
-    breakdown=`<div class="panel"><div class="panel-bar"><h3>Movimentação Anual por Item — ${state.repYear}</h3></div>
-      <div class="scroll-y" style="max-height:480px"><table>
-        <thead><tr><th>Produto</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Saldo Final</th></tr></thead>
-        <tbody>${itemAnoRows}</tbody>
-      </table></div></div>`;
-
   }else{
     start=state.repStart||today().slice(0,8)+"01";end=state.repEnd||today();
     periodoLbl="Período personalizado";
@@ -1254,23 +1202,339 @@ function viewRel(){
   }
   _repRange={start,end};
 
-  const {ent,sai,valEnt,qtdSai}=aggregate(dom,start,end);
+  const {ent,sai,valEnt,qtdSai,qtdEnt}=aggregate(dom,start,end);
   const porColab={};sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
+
+  // ----- Linhas por item (com saldo inicial/entradas/saídas/saldo final) -----
+  const busca=(state.repBusca||"").trim().toLowerCase();
+  let itens=prodOf(dom).map(p=>{
+    const ip=itemPeriodo(p.id,start,end);
+    return {id:p.id,nome:p.descricao,un:p.unidade||"UN",ca:dom==="safety"?caAtualProduto(p.id):"",ini:ip.ini,ent:ip.ent,sai:ip.sai,fim:ip.fim};
+  });
+  // Filtro por item específico (dropdown) e busca textual
+  if(state.repItem)itens=itens.filter(i=>i.id===state.repItem);
+  if(busca)itens=itens.filter(i=>i.nome.toLowerCase().includes(busca));
+  // Só itens com movimentação ou saldo, ordenados por saídas desc
+  const itensMov=itens.filter(i=>i.ent||i.sai||i.fim).sort((a,b)=>b.sai-a.sai||b.ent-a.ent||a.nome.localeCompare(b.nome,"pt-BR"));
+  const maxBar=Math.max(1,...itensMov.map(i=>Math.max(i.ent,i.sai)));
+
+  const barRows=itensMov.map(i=>{
+    const eW=Math.round(i.ent/maxBar*100),sW=Math.round(i.sai/maxBar*100);
+    const lowStock=i.fim<=0;
+    return `<div class="itembar">
+      <div class="top">
+        <div class="nm">${esc(i.nome)}${i.ca?`<span class="ca">CA ${esc(i.ca)}</span>`:""}</div>
+        <div class="sd" style="color:${lowStock?"var(--red)":"var(--blue)"}">${i.fim}<small> em estoque</small></div>
+      </div>
+      <div class="track" title="Entradas: ${i.ent} • Saídas: ${i.sai}">
+        ${i.ent?`<div class="bar ent" style="width:${Math.max(eW,8)}%">+${i.ent}</div>`:""}
+        ${i.sai?`<div class="bar sai" style="width:${Math.max(sW,8)}%">−${i.sai}</div>`:""}
+        ${(!i.ent&&!i.sai)?`<div style="padding:0 10px;font-size:11px;color:var(--txt-faint);align-self:center">sem movimentação no período</div>`:""}
+      </div>
+      <div class="meta">
+        <span class="miniflow">
+          <span class="pill ini">${i.ini}</span><span class="op">+</span>
+          <span class="pill ent">${i.ent}</span><span class="op">−</span>
+          <span class="pill sai">${i.sai}</span><span class="op">=</span>
+          <span class="pill fim">${i.fim}</span>
+          <span style="color:var(--txt-faint);margin-left:4px">inicial · entrou · saiu · final</span>
+        </span>
+      </div>
+    </div>`;
+  }).join("") || `<div class="empty">Nenhum item com movimentação ou saldo neste período.${busca||state.repItem?" Ajuste o filtro.":""}</div>`;
+
+  // Dropdown de itens
+  const itemOpts=`<option value="">Todos os itens</option>`+prodOf(dom).slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR")).map(p=>`<option value="${p.id}" ${state.repItem===p.id?"selected":""}>${esc(p.descricao)}</option>`).join("");
+
+  // ----- Top colaboradores (Safety) -----
+  let colabBlock="";
+  if(dom==="safety"){
+    const topColab=Object.entries(porColab).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    const colabRows=topColab.map(([k,q],i)=>{
+      const pct=Math.round(q/Math.max(1,topColab[0][1])*100);
+      return `<div class="itembar">
+        <div class="top"><div class="nm"><span style="font-size:11px;color:var(--txt-faint)">${i+1}°</span> ${esc(k)}</div><div class="sd">${q}<small> itens</small></div></div>
+        <div class="track"><div class="bar sai" style="width:${Math.max(pct,8)}%">${q}</div></div>
+      </div>`;
+    }).join("") || `<div class="empty">Sem retiradas no período.</div>`;
+    colabBlock=`<div class="panel"><div class="panel-bar"><h3>Quem mais retirou — ${periodoLbl}</h3></div>
+      <div class="scroll-y" style="max-height:440px">${colabRows}</div></div>`;
+  }
+
+  // ----- Resumo de totais para mini-gráfico de colunas -----
+  const totFim=itens.reduce((s,i)=>s+Math.max(0,i.fim),0);
+  const maxCol=Math.max(qtdEnt,qtdSai,1);
+  const colChart=`<div class="barcol">
+    <div class="col"><div class="cap">${qtdEnt}</div><div class="stack" style="height:${Math.round(qtdEnt/maxCol*100)}%;background:linear-gradient(180deg,#27b863,#1f9d55)"></div><div class="xl">Entradas</div></div>
+    <div class="col"><div class="cap">${qtdSai}</div><div class="stack" style="height:${Math.round(qtdSai/maxCol*100)}%;background:linear-gradient(180deg,#e8554a,#d23b30)"></div><div class="xl">Saídas</div></div>
+    <div class="col"><div class="cap">${totFim}</div><div class="stack" style="height:${Math.round(Math.min(totFim,maxCol)/maxCol*100)}%;background:linear-gradient(180deg,#3a40a0,#2D3277)"></div><div class="xl">Saldo<br>atual</div></div>
+  </div>`;
+
+  // ----- Gráfico de EVOLUÇÃO DO SALDO ao longo do período -----
+  // Pontos: se item específico → saldo daquele item; senão → saldo total do domínio (todos os itens).
+  const evoPts=buildEvolucao(dom,start,end,state.repItem);
+  const evoSVG=lineChartSVG(evoPts,state.repItem?("Saldo de "+(PRODUTOS.find(x=>x.id===state.repItem)||{descricao:""}).descricao):"Saldo total em estoque");
+  const evoBlock=`<div class="panel" style="grid-column:1 / -1">
+    <div class="panel-bar"><h3>Evolução do Saldo — ${periodoLbl}</h3>
+      <div class="legend"><span><span class="dot" style="background:#2D3277"></span>${state.repItem?"Saldo do item":"Saldo total"}</span></div>
+    </div>
+    <div style="padding:14px 8px 6px">${evoSVG}</div>
+  </div>`;
+
+  // ----- ALERTA DE ESTOQUE MÍNIMO -----
+  const alertas=itensAbaixoMin(dom);
+  const alertRows=alertas.map(a=>{
+    const crit=a.saldo<=0;
+    return `<div class="itembar" style="background:${crit?"var(--red-bg)":"#fff8ee"}">
+      <div class="top">
+        <div class="nm">${crit?"&#9888;&#65039; ":"&#128276; "}${esc(a.p.descricao)}</div>
+        <div class="sd" style="color:${crit?"var(--red)":"var(--amber)"}">${a.saldo}<small> / mín ${a.min}</small></div>
+      </div>
+      <div class="meta"><span style="color:${crit?"var(--red)":"var(--amber)"};font-weight:600">${crit?"Sem estoque — repor com urgência":"Abaixo do mínimo — programar reposição ("+(a.min-a.saldo>0?("faltam "+(a.min-a.saldo)):"no limite")+")"}</span></div>
+    </div>`;
+  }).join("");
+  const totalProdsDom=prodOf(dom).length;
+  const semMin=Object.keys(ESTOQUE_MIN).filter(id=>{const p=PRODUTOS.find(x=>x.id===id);return p&&p.dom===dom;}).length;
+  const alertBlock=`<div class="panel" style="grid-column:1 / -1">
+    <div class="panel-bar"><h3>${alertas.length?"&#9888;&#65039; ":""}Alertas de Estoque Mínimo</h3>
+      <div class="right"><button class="btn ghost sm" onclick="configurarMinimos()">&#9881;&#65039; Configurar mínimos</button></div>
+    </div>
+    ${alertas.length
+      ? `<div class="scroll-y" style="max-height:320px">${alertRows}</div>`
+      : `<div class="empty">${semMin?"Nenhum item abaixo do mínimo. ":"Nenhum mínimo configurado ainda. "}<a href="#" onclick="configurarMinimos();return false;" style="color:var(--blue);font-weight:600">${semMin?"Tudo certo ✓":"Definir estoques mínimos"}</a></div>`}
+  </div>`;
 
   return `
   <div class="selbar">
     <div class="fg"><label>Tipo de relatório</label>
       <div class="seg" id="repSeg">${[["semana","Semanal"],["mes","Mensal"],["ano","Anual"],["periodo","Período"]].map(([p,l])=>`<button data-p="${p}" class="${state.rep===p?"active":""}">${l}</button>`).join("")}</div></div>
     ${weekOptions}
-    <button class="btn ghost sm" data-act="csv" style="margin-bottom:2px">⤓ CSV</button><button class="btn ghost sm" onclick="backupManual()" style="margin-bottom:2px" title="Backup agora no Google Drive">&#9729; Drive</button><a href="https://drive.google.com/drive/folders/1XxVvU6fE2ozesThx5-pIT0qCOe3AyYj8" target="_blank" class="btn ghost sm" style="margin-bottom:2px;text-decoration:none">&#128194; Abrir Pasta</a>
+    <div class="fg"><label>Item</label><select id="rep_item" class="repsearch">${itemOpts}</select></div>
+    <div class="fg"><label>Buscar EPI</label><input id="rep_busca" class="repsearch" placeholder="Ex: luva, capacete…" value="${esc(state.repBusca||"")}"></div>
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-left:auto;flex-wrap:wrap">
+      <button class="btn primary sm" onclick="abrirRelatorioVisual()" style="margin-bottom:2px">&#128202; Relatório Visual (PDF)</button>
+      <button class="btn ghost sm" data-act="csv" style="margin-bottom:2px">&#8675; CSV</button>
+      <button class="btn ghost sm" onclick="backupManual()" style="margin-bottom:2px" title="Backup agora no Google Drive">&#9729; Drive</button>
+    </div>
   </div>
   <div class="stats">
     <div class="stat"><div class="l">${periodoLbl}</div><div class="v" style="font-size:15px">${fmtD(start)} → ${fmtD(end)}</div></div>
-    <div class="stat green"><div class="l">Entradas</div><div class="v">${ent.length}<small> lanç.</small></div><div class="m">${brl(valEnt)} em compras</div></div>
-    <div class="stat"><div class="l">Saídas</div><div class="v">${sai.length}<small> regs.</small></div><div class="m">${qtdSai} itens</div></div>
-    <div class="stat amber"><div class="l">Colaboradores</div><div class="v">${Object.keys(porColab).length}</div><div class="m">atendidos</div></div>
+    <div class="stat green"><div class="l">Entradas</div><div class="v">${qtdEnt}<small> itens</small></div><div class="m">${ent.length} lançamento${ent.length===1?"":"s"} · ${brl(valEnt)}</div></div>
+    <div class="stat red"><div class="l">Saídas</div><div class="v">${qtdSai}<small> itens</small></div><div class="m">${sai.length} registro${sai.length===1?"":"s"}</div></div>
+    <div class="stat ${alertas.length?"red":"amber"}"><div class="l">${alertas.length?"⚠ Estoque baixo":"Colaboradores"}</div><div class="v">${alertas.length?alertas.length:Object.keys(porColab).length}</div><div class="m">${alertas.length?"item(ns) a repor":"atendidos no período"}</div></div>
   </div>
-  ${breakdown}`;
+  ${alertBlock}
+  <div class="rep-grid" style="margin-top:12px">
+    ${evoBlock}
+    <div class="panel" style="grid-column:1 / -1">
+      <div class="panel-bar"><h3>Entradas × Saídas por EPI — ${periodoLbl}</h3>
+        <div class="legend"><span><span class="dot ent"></span>Entrou</span><span><span class="dot sai"></span>Saiu</span></div>
+      </div>
+      <div class="scroll-y" style="max-height:520px">${barRows}</div>
+    </div>
+    <div class="panel">
+      <div class="panel-bar"><h3>Balanço do Período</h3></div>
+      ${colChart}
+      <div style="padding:0 16px 16px;font-size:12px;color:var(--txt-dim);line-height:1.6">
+        Entraram <b style="color:var(--green)">${qtdEnt}</b> e saíram <b style="color:var(--red)">${qtdSai}</b> itens${dom==="safety"?" de EPI":""} no período selecionado.
+        ${qtdSai>qtdEnt?`Saídas superaram entradas em <b>${qtdSai-qtdEnt}</b>.`:qtdEnt>qtdSai?`Entradas superaram saídas em <b>${qtdEnt-qtdSai}</b>.`:`Entradas e saídas equilibradas.`}
+      </div>
+    </div>
+    ${colabBlock||`<div class="panel"><div class="panel-bar"><h3>Itens sem Saldo</h3></div><div class="scroll-y" style="max-height:300px">${
+      itens.filter(i=>i.fim<=0).map(i=>`<div class="itembar"><div class="top"><div class="nm">${esc(i.nome)}</div><div class="sd" style="color:var(--red)">${i.fim}</div></div></div>`).join("")||`<div class="empty">Todos os itens com saldo positivo.</div>`
+    }</div></div>`}
+  </div>`;
+}
+
+/* ===== Construir série de evolução do saldo ===== */
+function buildEvolucao(dom,start,end,pid){
+  const sd=new Date(start),ed=new Date(end);
+  const totalDays=Math.round((ed-sd)/86400000)+1;
+  // Define o passo: diário se <=31 dias, semanal se mais
+  const pts=[];
+  const ids=pid?[pid]:prodOf(dom).map(p=>p.id);
+  function saldoConjuntoAte(date){return ids.reduce((s,id)=>s+saldoAteData(id,date),0);}
+  if(totalDays<=31){
+    for(let i=0;i<totalDays;i++){
+      const d=new Date(sd);d.setDate(d.getDate()+i);const ds=d.toISOString().slice(0,10);
+      pts.push({x:ds,label:String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0"),y:saldoConjuntoAte(ds)});
+    }
+  }else{
+    // amostragem semanal
+    let d=new Date(sd);
+    while(d<=ed){
+      const ds=d.toISOString().slice(0,10);
+      pts.push({x:ds,label:String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0"),y:saldoConjuntoAte(ds)});
+      d.setDate(d.getDate()+7);
+    }
+    const dsEnd=ed.toISOString().slice(0,10);
+    if(!pts.length||pts[pts.length-1].x!==dsEnd)pts.push({x:dsEnd,label:String(ed.getDate()).padStart(2,"0")+"/"+String(ed.getMonth()+1).padStart(2,"0"),y:saldoConjuntoAte(dsEnd)});
+  }
+  return pts;
+}
+
+/* ===== Gráfico de linha SVG (responsivo) ===== */
+function lineChartSVG(pts,titulo){
+  if(!pts||pts.length<2)return `<div class="empty">Dados insuficientes para o gráfico (apenas ${pts?pts.length:0} ponto).</div>`;
+  const W=900,H=240,pl=48,pr=18,pt=18,pb=42;
+  const iw=W-pl-pr,ih=H-pt-pb;
+  const ys=pts.map(p=>p.y);
+  let ymax=Math.max(...ys,1),ymin=Math.min(...ys,0);
+  if(ymin>0)ymin=0;
+  const range=(ymax-ymin)||1;
+  const X=i=>pl+(i/(pts.length-1))*iw;
+  const Y=v=>pt+ih-((v-ymin)/range)*ih;
+  // grid + labels Y (4 linhas)
+  let grid="",ylab="";
+  for(let g=0;g<=4;g++){
+    const val=ymin+range*g/4;const yy=Y(val);
+    grid+=`<line x1="${pl}" y1="${yy.toFixed(1)}" x2="${W-pr}" y2="${yy.toFixed(1)}" stroke="#e6ebf1" stroke-width="1"/>`;
+    ylab+=`<text x="${pl-8}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#8b94a3" font-family="monospace">${Math.round(val)}</text>`;
+  }
+  // X labels (no máximo ~8)
+  const step=Math.ceil(pts.length/8);
+  let xlab="";
+  pts.forEach((p,i)=>{if(i%step===0||i===pts.length-1)xlab+=`<text x="${X(i).toFixed(1)}" y="${H-pb+20}" text-anchor="middle" font-size="10.5" fill="#8b94a3">${p.label}</text>`;});
+  // area + line
+  const linePts=pts.map((p,i)=>`${X(i).toFixed(1)},${Y(p.y).toFixed(1)}`).join(" ");
+  const areaPts=`${pl},${Y(ymin).toFixed(1)} ${linePts} ${(W-pr)},${Y(ymin).toFixed(1)}`;
+  let dots="";
+  pts.forEach((p,i)=>{if(i%step===0||i===pts.length-1)dots+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="3.5" fill="#2D3277"/><title>${p.label}: ${p.y}</title>`;});
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
+    <defs><linearGradient id="evoFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2D3277" stop-opacity="0.18"/><stop offset="100%" stop-color="#2D3277" stop-opacity="0.01"/></linearGradient></defs>
+    ${grid}${ylab}
+    <polygon points="${areaPts}" fill="url(#evoFill)"/>
+    <polyline points="${linePts}" fill="none" stroke="#2D3277" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${xlab}
+  </svg>`;
+}
+
+/* ===== Modal de configuração de estoques mínimos ===== */
+function configurarMinimos(){
+  const dom=state.dom;
+  const prods=prodOf(dom).slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
+  if(!prods.length){toast("Cadastre produtos antes de definir mínimos.","warn");return;}
+  const rows=prods.map(p=>{
+    const saldo=atual(p.id),min=getMin(p.id);
+    const baixo=min>0&&saldo<=min;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line-soft)">
+      <div style="flex:1;font-size:13.5px;font-weight:500">${esc(p.descricao)}<div style="font-size:11px;color:${baixo?"var(--red)":"var(--txt-faint)"}">saldo atual: ${saldo}${baixo?" — abaixo do mínimo":""}</div></div>
+      <input type="number" min="0" step="1" id="min_${p.id}" value="${min||""}" placeholder="0" style="width:90px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-family:var(--mono);text-align:right">
+    </div>`;
+  }).join("");
+  openModal("Configurar Estoque Mínimo · "+(dom==="safety"?"Safety":"Insumos"),
+    `<div style="font-size:12.5px;color:var(--txt-dim);margin-bottom:10px">Defina a quantidade mínima de cada item. Quando o saldo atingir ou ficar abaixo desse valor, o item entra na lista de alertas. Deixe em branco ou 0 para não monitorar.</div>
+     <div style="max-height:50vh;overflow:auto">${rows}</div>`,
+    [{label:"Cancelar",cls:"ghost",act:closeModal},
+     {label:"Salvar mínimos",cls:"primary",act:function(){
+        prods.forEach(p=>{const el=document.getElementById("min_"+p.id);if(el)setMin(p.id,el.value);});
+        closeModal();toast("Estoques mínimos salvos.","ok");render();
+     }}]);
+}
+
+
+/* ================= RELATÓRIO VISUAL (PDF imprimível) ================= */
+function abrirRelatorioVisual(){
+  const dom=state.dom;
+  const r=_repRange;const start=r.start,end=r.end;
+  const {ent,sai,valEnt,qtdEnt,qtdSai}=aggregate(dom,start,end);
+  const porColab={};sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
+  const busca=(state.repBusca||"").trim().toLowerCase();
+  let itens=prodOf(dom).map(p=>{const ip=itemPeriodo(p.id,start,end);return{nome:p.descricao,un:p.unidade||"UN",ca:dom==="safety"?caAtualProduto(p.id):"",ini:ip.ini,ent:ip.ent,sai:ip.sai,fim:ip.fim};});
+  if(state.repItem){const sp=PRODUTOS.find(x=>x.id===state.repItem);if(sp)itens=itens.filter(i=>i.nome===sp.descricao);}
+  if(busca)itens=itens.filter(i=>i.nome.toLowerCase().includes(busca));
+  itens=itens.filter(i=>i.ent||i.sai||i.fim).sort((a,b)=>b.sai-a.sai||a.nome.localeCompare(b.nome,"pt-BR"));
+  const maxBar=Math.max(1,...itens.map(i=>Math.max(i.ent,i.sai)));
+  const periodoLbl=document.querySelector(".stat .l")?document.querySelector(".stat .l").textContent:"Período";
+
+  const itemRows=itens.map(i=>{
+    const eW=Math.round(i.ent/maxBar*100),sW=Math.round(i.sai/maxBar*100);
+    return `<tr>
+      <td class="nm">${esc(i.nome)}${i.ca?`<span class="ca">CA ${esc(i.ca)}</span>`:""}</td>
+      <td class="n ini">${i.ini}</td>
+      <td class="n ent">+${i.ent}</td>
+      <td class="n sai">−${i.sai}</td>
+      <td class="n fim" style="${i.fim<=0?"color:#d23b30":""}">${i.fim}</td>
+      <td class="bars">
+        <div class="b"><span class="be" style="width:${i.ent?Math.max(eW,4):0}%"></span></div>
+        <div class="b"><span class="bs" style="width:${i.sai?Math.max(sW,4):0}%"></span></div>
+      </td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="6" style="text-align:center;padding:30px;color:#888">Sem dados no período.</td></tr>`;
+
+  const topColab=Object.entries(porColab).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const colabRows=dom==="safety"?(topColab.map(([k,q],i)=>`<tr><td>${i+1}°</td><td>${esc(k)}</td><td class="n">${q}</td></tr>`).join("")||`<tr><td colspan="3" style="text-align:center;padding:20px;color:#888">Sem retiradas.</td></tr>`):"";
+
+  // Alertas de estoque mínimo
+  const alertasPDF=itensAbaixoMin(dom);
+  const alertRowsPDF=alertasPDF.map(a=>`<tr style="background:${a.saldo<=0?"#fbe5e3":"#fff8ee"}"><td class="nm">${a.saldo<=0?"&#9888; ":""}${esc(a.p.descricao)}</td><td class="n">${a.min}</td><td class="n" style="color:${a.saldo<=0?"#d23b30":"#b8860b"};font-weight:800">${a.saldo}</td><td style="color:${a.saldo<=0?"#d23b30":"#b8860b"};font-size:11.5px">${a.saldo<=0?"Repor com urgência":"Programar reposição"}</td></tr>`).join("");
+  const alertSectionPDF=alertasPDF.length?`<h2>&#9888; Alertas de Estoque Mínimo (${alertasPDF.length})</h2>
+    <table><thead><tr><th>Produto / EPI</th><th class="n">Mínimo</th><th class="n">Saldo atual</th><th>Status</th></tr></thead><tbody>${alertRowsPDF}</tbody></table>`:"";
+
+  var _mk=document.querySelector(".logo .mark");
+  const logoTag=(_mk&&_mk.src)?`<img src="${_mk.src}" style="height:46px">`:`<div style="font-family:Arial;font-weight:800;font-size:20px;color:#2D3277">SMG6 · Estoque</div>`;
+  const now=new Date().toLocaleString("pt-BR");
+
+  const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de Estoque — ${esc(periodoLbl)}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:"Segoe UI",Arial,sans-serif;color:#1d2733;padding:34px 40px;background:#fff}
+    .head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #FFE600;padding-bottom:16px;margin-bottom:8px}
+    .head .meta{text-align:right;font-size:11px;color:#5b6675;line-height:1.6}
+    h1{font-size:21px;color:#2D3277;margin:18px 0 3px}
+    .sub{font-size:13px;color:#5b6675;margin-bottom:18px}
+    .kpis{display:flex;gap:12px;margin-bottom:22px}
+    .kpi{flex:1;border:1px solid #d3dae4;border-radius:9px;padding:13px 15px;border-left:4px solid #2D3277}
+    .kpi.g{border-left-color:#1f9d55}.kpi.r{border-left-color:#d23b30}.kpi.a{border-left-color:#b8860b}
+    .kpi .l{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b94a3;font-weight:700}
+    .kpi .v{font-size:25px;font-weight:800;margin-top:3px}
+    .kpi .m{font-size:11px;color:#5b6675;margin-top:2px}
+    h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#5b6675;margin:24px 0 9px;padding-bottom:6px;border-bottom:1px solid #e6ebf1}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    th{text-align:left;background:#f6f8fb;padding:8px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#5b6675;border-bottom:1px solid #d3dae4}
+    td{padding:8px 10px;border-bottom:1px solid #eef1f6;vertical-align:middle}
+    td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+    td.nm{font-weight:600}
+    td.nm .ca{display:inline-block;font-size:9.5px;font-weight:700;color:#2D3277;background:#e8e9f5;padding:1px 6px;border-radius:8px;margin-left:7px}
+    td.ent{color:#1f9d55}td.sai{color:#d23b30}td.ini{color:#8b94a3}td.fim{color:#2D3277;font-weight:800}
+    td.bars{width:160px}
+    .b{height:7px;background:#eef1f6;border-radius:4px;margin:3px 0;overflow:hidden}
+    .be{display:block;height:100%;background:#27b863}.bs{display:block;height:100%;background:#e8554a}
+    .foot{margin-top:30px;padding-top:14px;border-top:1px solid #e6ebf1;font-size:10.5px;color:#8b94a3;display:flex;justify-content:space-between}
+    .noprint{margin:22px 0;text-align:center}
+    .btn{background:#2D3277;color:#fff;border:none;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin:0 5px}
+    .btn.sec{background:#fff;color:#2D3277;border:1px solid #2D3277}
+    @media print{.noprint{display:none}body{padding:0}}
+  </style></head><body>
+    <div class="head">${logoTag}<div class="meta"><b>Relatório de ${dom==="safety"?"EPIs (Safety)":"Insumos"}</b><br>Gerado em ${now}<br>${fmtD(start)} a ${fmtD(end)}</div></div>
+    <h1>Relatório de Movimentação de Estoque</h1>
+    <div class="sub">${esc(periodoLbl)} · ${dom==="safety"?"Equipamentos de Proteção Individual":"Insumos"}</div>
+    <div class="kpis">
+      <div class="kpi g"><div class="l">Entradas</div><div class="v">${qtdEnt}</div><div class="m">${ent.length} lançamento(s) · ${brl(valEnt)}</div></div>
+      <div class="kpi r"><div class="l">Saídas</div><div class="v">${qtdSai}</div><div class="m">${sai.length} registro(s)</div></div>
+      <div class="kpi a"><div class="l">Colaboradores</div><div class="v">${Object.keys(porColab).length}</div><div class="m">atendidos</div></div>
+      <div class="kpi"><div class="l">Itens movimentados</div><div class="v">${itens.length}</div><div class="m">no período</div></div>
+    </div>
+    ${alertSectionPDF}
+    <h2>Entradas, Saídas e Saldo por Item</h2>
+    <table>
+      <thead><tr><th>Produto / EPI</th><th class="n">Inicial</th><th class="n">Entrou</th><th class="n">Saiu</th><th class="n">Saldo</th><th>Comparativo</th></tr></thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+    ${dom==="safety"?`<h2>Colaboradores que mais retiraram</h2>
+    <table><thead><tr><th style="width:50px">#</th><th>Colaborador</th><th class="n">Itens retirados</th></tr></thead><tbody>${colabRows}</tbody></table>`:""}
+    <div class="noprint">
+      <button class="btn" onclick="window.print()">&#128424; Imprimir / Salvar PDF</button>
+      <button class="btn sec" onclick="window.close()">Fechar</button>
+    </div>
+    <div class="foot"><span>Controle de Estoque SMG6 — Mercado Livre</span><span>Documento gerado automaticamente pelo sistema</span></div>
+  </body></html>`;
+
+  const blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const win=window.open(url,"_blank");
+  if(!win)toast("Permita pop-ups para abrir o relatório visual.","warn");
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 
 /* ================= UI: TOAST + MODAL ================= */
@@ -1392,6 +1656,12 @@ function wire(){
     const rw=document.getElementById("rep_week");if(rw)rw.onchange=()=>{state.repWeek=Number(rw.value);render();};
     const rs=document.getElementById("rep_start");if(rs)rs.onchange=()=>{state.repStart=rs.value;render();};
     const re=document.getElementById("rep_end");if(re)re.onchange=()=>{state.repEnd=re.value;render();};
+    const ri=document.getElementById("rep_item");if(ri)ri.onchange=()=>{state.repItem=ri.value;render();};
+    const rb=document.getElementById("rep_busca");if(rb)rb.oninput=()=>{
+      state.repBusca=rb.value;
+      clearTimeout(window._repBuscaT);
+      window._repBuscaT=setTimeout(()=>{render();setTimeout(()=>{var el=document.getElementById("rep_busca");if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},0);},250);
+    };
   }
 }
 
