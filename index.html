@@ -164,6 +164,24 @@
   .barcol .col .stack{width:100%;max-width:46px;border-radius:5px 5px 0 0;transition:height .5s cubic-bezier(.4,0,.2,1);position:relative}
   .barcol .col .cap{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--txt)}
   .barcol .col .xl{font-size:10.5px;color:var(--txt-faint);text-align:center;line-height:1.2}
+/* ===== DASHBOARD ===== */
+.dash-title{font-family:var(--disp);font-weight:800;font-size:18px;text-align:center;color:var(--blue);letter-spacing:.04em;margin:6px 0 16px;text-transform:uppercase}
+.dash-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.dash-card.kpi-big{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(20,30,60,.05)}
+.dash-card.kpi-big .ic{font-size:28px;width:54px;height:54px;display:flex;align-items:center;justify-content:center;background:#eef0fb;border-radius:12px;flex:0 0 auto}
+.dash-card.kpi-big.alt .ic{background:#e7f6ee}
+.dash-card.kpi-big.alt2 .ic{background:#fdf3e3}
+.dash-card.kpi-big.alt3 .ic{background:#eef0fb}
+.dash-card.kpi-big .lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-dim);font-weight:700;margin-bottom:2px}
+.dash-card.kpi-big .num{font-family:var(--disp);font-weight:800;font-size:32px;color:var(--blue);line-height:1}
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.dash-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.dash-tbl thead th{position:sticky;top:0;background:#f6f8fb;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-dim);border-bottom:1px solid var(--line)}
+.dash-tbl th.n,.dash-tbl td.n{text-align:right}
+.dash-tbl td{padding:8px 10px;border-bottom:1px solid var(--line-soft)}
+.dash-tbl td.nm{font-weight:600}
+.dash-buy .panel-bar h3{color:var(--blue)}
+@media(max-width:820px){.dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -191,6 +209,7 @@
     <button data-view="colaboradores" id="menuColab">Colaboradores</button>
     <button data-view="desligados" id="menuDesl">Desligados</button>
     <button data-view="relatorios">Relatórios</button>
+    <button data-view="dashboard" id="menuDash">Dashboard</button>
     <div style="flex:1"></div>
     <button id="menuUsuarios" data-view="usuarios" onclick="viewUsuarios()" style="color:var(--txt-faint);display:none">Usuários</button>
   </div>
@@ -258,7 +277,7 @@ const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","
 const MESES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const ALERTA_DIAS=15;
 /* ── Google Sheets / Apps Script ── */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNPKv7inxLzI1BU1H_odWAqQDWvN9C80usTDEm9Vm9RzE8KaTwo1eL-1yzwphXZCATVg/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwTxP0Xs_-PjXtmwG22sKLHimrD7T9R5kK7ol5mPfy4W8xMzfidlwTY3Ja0bVNBGX7D7g/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
 const DRIVE_FOLDER_EPI = "1xIq3muw068guiHAPAEe17NA_pyjUTpPg";
 let   DRIVE_STATUS = "idle";
 
@@ -420,6 +439,16 @@ const COLAB_PLANILHA_DESLIGADOS=[
 
 /* ================= HELPERS ================= */
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+/* Código de validação curto e legível derivado do id da movimentação (ex.: EPI-7F3A-9K2C) */
+function gerarCodigoValidacao(seed){
+  var base=String(seed||uid()).toUpperCase().replace(/[^A-Z0-9]/g,"");
+  // mistura simples para distribuir os caracteres
+  var h=0;for(var i=0;i<base.length;i++){h=(h*31+base.charCodeAt(i))>>>0;}
+  var alf="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem caracteres ambíguos (0/O/1/I)
+  var out="";var n=h;
+  for(var k=0;k<8;k++){out+=alf[n%alf.length];n=Math.floor(n/alf.length)+((base.charCodeAt(k%base.length)||7)*7);}
+  return "EPI-"+out.slice(0,4)+"-"+out.slice(4,8);
+}
 const today=()=>new Date().toISOString().slice(0,10);
 const brl=n=>(Number(n)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const fmtD=d=>{
@@ -862,6 +891,7 @@ function render(){
       else if(state.view==="colaboradores") html=state.colab?viewColabDet():viewColabList();
       else if(state.view==="desligados")    html=viewDesligados();
       else if(state.view==="relatorios")    html=viewRel();
+      else if(state.view==="dashboard")      html=viewDashboard();
       else if(state.view==="usuarios")      { viewUsuariosPanel(); return; }
     }catch(viewErr){
       html='<div style="padding:30px;color:var(--red);font-family:var(--mono);font-size:13px">'
@@ -927,10 +957,14 @@ function viewEstoque(){
       </tr>`;
     }).join("") || `<tr><td colspan="5"><div class="empty">Nenhum produto cadastrado.</div></td></tr>`;
     detRows=resumoRows;
+    const totRetirado=MOVS.filter(m=>m.dom===dom&&m.tipo==="saida").reduce((s,m)=>s+m.qtd,0);
+    const totEntrada=MOVS.filter(m=>m.dom===dom&&m.tipo==="entrada").reduce((s,m)=>s+m.qtd,0);
     totals=`<div class="totals">
       <div class="tot"><span class="l">Total de Produtos</span><span class="v">${prods.length}</span></div>
+      <div class="tot"><span class="l">Total Entradas</span><span class="v green">+${totEntrada}</span></div>
+      <div class="tot"><span class="l">Total Retirado</span><span class="v red">−${totRetirado}</span></div>
       <div class="tot"><span class="l">Itens em Estoque</span><span class="v green">${todosProd.reduce((s,x)=>s+(x.saldo>0?x.saldo:0),0)}</span></div>
-      <div class="tot"><span class="l">Valor Total Estimado</span><span class="v blue">${brl(todosProd.reduce((s,{p,saldo})=>s+saldo*custoUnit(p.id),0))}</span></div></div>`;
+      <div class="tot"><span class="l">Valor Total em Estoque</span><span class="v blue">${brl(todosProd.reduce((s,{p,saldo})=>s+saldo*custoUnit(p.id),0))}</span></div></div>`;
   }
 
   const tableHeader=sel
@@ -945,7 +979,8 @@ function viewEstoque(){
     <button class="tbtn tb-red" data-act="delProd" ${hasSel?"":"disabled"}><span class="ic">✖</span> Excluir Produto</button>
     <span class="tb-sep"></span>
     <button class="tbtn" onclick="backupManual()" title="Backup agora no Google Drive"><span class="ic">&#9729;</span> Backup Drive</button>
-    <a href="https://drive.google.com/drive/folders/1XxVvU6fE2ozesThx5-pIT0qCOe3AyYj8" target="_blank" class="tbtn" style="text-decoration:none" title="Abrir pasta no Drive"><span class="ic">&#128194;</span> Abrir Drive</a>
+    <a href="https://drive.google.com/drive/folders/${DRIVE_FOLDER_EPI}" target="_blank" class="tbtn" style="text-decoration:none" title="Abrir a pasta dos comprovantes no Drive"><span class="ic">&#128194;</span> Pasta Comprovantes</a>
+    <a href="https://docs.google.com/spreadsheets/d/1em6MISa-K_aNOYaGhCLzeKnyRE2CrHlx1Gp3uIKIyCM/edit" target="_blank" class="tbtn" style="text-decoration:none" title="Abrir a base de dados (planilha)"><span class="ic">&#128202;</span> Base de Dados</a>
   </div>`;
 
   return `
@@ -982,12 +1017,17 @@ function viewColabList(){
   });
 
   const colabSel=state.colab||"";
+  const busca=(state.colabBusca||"").trim().toLowerCase();
+  const filtrados=busca?ativos.filter(n=>n.toLowerCase().includes(busca)):ativos;
   const selectHtml=`<div class="colab-select-wrap">
-    <label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600">Colaborador</label>
-    <select id="colabDropdown">
-      <option value="">— Selecione um colaborador —</option>
-      ${ativos.map(n=>`<option value="${esc(n)}" ${colabSel===n?"selected":""}>${esc(n)}</option>`).join("")}
+    <label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600">Buscar colaborador</label>
+    <input id="colabBusca" type="text" placeholder="Digite o nome…" value="${esc(state.colabBusca||"")}" autocomplete="off"
+      style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box">
+    <select id="colabDropdown" size="${busca&&filtrados.length>1?Math.min(filtrados.length+1,8):1}">
+      <option value="">${busca?(filtrados.length+" resultado"+(filtrados.length===1?"":"s")):"— Selecione um colaborador —"}</option>
+      ${filtrados.map(n=>`<option value="${esc(n)}" ${colabSel===n?"selected":""}>${esc(n)}</option>`).join("")}
     </select>
+    ${busca&&filtrados.length===0?'<div style="font-size:12px;color:var(--red);margin-top:6px">Nenhum colaborador encontrado para "'+esc(state.colabBusca)+'".</div>':""}
   </div>`;
 
   if(colabSel && ativos.includes(colabSel)){
@@ -1169,6 +1209,40 @@ async function desligarColab(nome){
 }
 
 /* ================= RELATÓRIOS ================= */
+/* Calcula start/end/label conforme state.rep (compartilhado por Relatórios e Dashboard) */
+function repRange(){
+  const todayStr=today();
+  if(!state.repYear)state.repYear=Number(todayStr.slice(0,4));
+  if(!state.repMonth)state.repMonth=todayStr.slice(0,7);
+  let start,end,periodoLbl="";
+  if(state.rep==="semana"){
+    const wks=weeksInYear(state.repYear);const curW=weekOfYear(todayStr);const selW=state.repWeek||curW;
+    const wkObj=wks.find(w=>w.w===selW)||wks[wks.length-1];
+    start=wkObj.start;end=wkObj.end;periodoLbl=`${wkObj.label} — ${fmtD(wkObj.start)} a ${fmtD(wkObj.end)}`;
+  }else if(state.rep==="mes"){
+    const r=monthRange(state.repMonth);start=r.start;end=r.end;
+    periodoLbl=`${MESES_FULL[Number(state.repMonth.split("-")[1])-1]} / ${state.repMonth.split("-")[0]}`;
+  }else if(state.rep==="ano"){
+    const r=yearRange(state.repYear);start=r.start;end=r.end;periodoLbl=`Ano ${state.repYear}`;
+  }else{
+    start=state.repStart||today().slice(0,8)+"01";end=state.repEnd||today();periodoLbl="Período personalizado";
+  }
+  return {start:start,end:end,periodoLbl:periodoLbl};
+}
+/* Gera os controles de seleção de período (reaproveita IDs do wire) */
+function weekOptionsHtml(){
+  if(state.rep==="semana"){
+    const wks=weeksInYear(state.repYear);const curW=weekOfYear(today());const selW=state.repWeek||curW;
+    return `<div class="fg"><label>Ano</label><input type="number" id="rep_year" value="${state.repYear}" min="2020" max="2100" style="width:100px"></div>
+      <div class="fg"><label>Semana</label><select id="rep_week">${wks.map(w=>`<option value="${w.w}" ${w.w===selW?"selected":""}>${w.label} · ${fmtD(w.start)} a ${fmtD(w.end)}</option>`).join("")}</select></div>`;
+  }else if(state.rep==="mes"){
+    return `<div class="fg"><label>Mês</label><input type="month" id="rep_month" value="${state.repMonth}"></div>`;
+  }else if(state.rep==="ano"){
+    return `<div class="fg"><label>Ano</label><input type="number" id="rep_year" value="${state.repYear}" min="2020" max="2100" style="width:100px"></div>`;
+  }
+  return `<div class="fg"><label>De</label><input type="date" id="rep_start" value="${state.repStart||today().slice(0,8)+"01"}"></div><div class="fg"><label>Até</label><input type="date" id="rep_end" value="${state.repEnd||today()}"></div>`;
+}
+
 function viewRel(){
   const dom=state.dom;
   const todayStr=today();
@@ -1304,6 +1378,35 @@ function viewRel(){
       : `<div class="empty">${semMin?"Nenhum item abaixo do mínimo. ":"Nenhum mínimo configurado ainda. "}<a href="#" onclick="configurarMinimos();return false;" style="color:var(--blue);font-weight:600">${semMin?"Tudo certo ✓":"Definir estoques mínimos"}</a></div>`}
   </div>`;
 
+  // ----- GRÁFICO DE MOTIVOS DAS TROCAS (item 3, só Safety faz sentido) -----
+  const motivos=agregarMotivos(dom,start,end);
+  const motivoBlock=dom==="safety"?`<div class="panel">
+    <div class="panel-bar"><h3>Motivos das Trocas — ${periodoLbl}</h3></div>
+    ${donutSVG(motivos.cont,motivos.total)}
+  </div>`:"";
+
+  // ----- PREVISÃO DE DEMANDA E NECESSIDADE DE COMPRA (itens 4, 13, 14) -----
+  const compras=previsaoCompra(dom,30).sort((a,b)=>b.necessidade-a.necessidade);
+  const comprasNec=compras.filter(c=>c.necessidade>0);
+  const compraRows=comprasNec.map(c=>{
+    const urgente=c.diasRestantes!==Infinity&&c.diasRestantes<=7;
+    return `<div class="itembar" style="${urgente?"background:var(--red-bg)":""}">
+      <div class="top"><div class="nm">${urgente?"&#9888;&#65039; ":""}${esc(c.p.descricao)}${c.ca?' <span class="chip tam" style="font-size:10px">C.A. '+esc(c.ca)+'</span>':''}</div>
+        <div class="sd" style="color:var(--blue)">${c.necessidade}<small> a comprar</small></div></div>
+      <div class="meta" style="font-size:11.5px;color:var(--txt-dim)">
+        Saldo atual: <b>${c.saldo}</b> · consumo médio: <b>${c.cmd.toFixed(1)}/dia</b> · ${c.diasRestantes===Infinity?"sem consumo recente":("dura ~<b>"+c.diasRestantes+" dias</b>")}${c.custo>0?(" · custo est.: <b>"+brl(c.necessidade*c.custo)+"</b>"):""}
+      </div>
+    </div>`;
+  }).join("");
+  const custoCompra=comprasNec.reduce((s,c)=>s+c.necessidade*c.custo,0);
+  const compraBlock=`<div class="panel" style="grid-column:1 / -1">
+    <div class="panel-bar"><h3>&#128722; Previsão de Compra — itens com baixo volume</h3>
+      ${custoCompra>0?`<div class="right" style="font-size:12.5px;color:var(--txt-dim)">Investimento estimado: <b style="color:var(--blue)">${brl(custoCompra)}</b></div>`:""}
+    </div>
+    <div style="padding:8px 14px;font-size:12px;color:var(--txt-dim);border-bottom:1px solid var(--line-soft)">Projeção para os próximos <b>30 dias</b>, com base no consumo médio dos últimos 90 dias e no estoque mínimo configurado.</div>
+    ${comprasNec.length?`<div class="scroll-y" style="max-height:380px">${compraRows}</div>`:`<div class="empty">Nenhuma compra prevista. Estoque suficiente para o horizonte de 30 dias.</div>`}
+  </div>`;
+
   return `
   <div class="selbar">
     <div class="fg"><label>Tipo de relatório</label>
@@ -1324,8 +1427,10 @@ function viewRel(){
     <div class="stat ${alertas.length?"red":"amber"}"><div class="l">${alertas.length?"⚠ Estoque baixo":"Colaboradores"}</div><div class="v">${alertas.length?alertas.length:Object.keys(porColab).length}</div><div class="m">${alertas.length?"item(ns) a repor":"atendidos no período"}</div></div>
   </div>
   ${alertBlock}
+  ${compraBlock}
   <div class="rep-grid" style="margin-top:12px">
     ${evoBlock}
+    ${motivoBlock}
     <div class="panel" style="grid-column:1 / -1">
       <div class="panel-bar"><h3>Entradas × Saídas por EPI — ${periodoLbl}</h3>
         <div class="legend"><span><span class="dot ent"></span>Entrou</span><span><span class="dot sai"></span>Saiu</span></div>
@@ -1432,11 +1537,223 @@ function configurarMinimos(){
      }}]);
 }
 
+/* ===== ANÁLISES: motivos, top itens, previsão de demanda ===== */
+const MOTIVO_CORES={"Novo Colaborador":"#2D3277","Dano":"#d23b30","Perda":"#b8860b","Desgaste":"#1f9d55","Outro":"#7a7f8c"};
+/* Extrai o motivo de uma movimentação (campo direto ou parse de obs) */
+function motivoDe(m){
+  if(m.motivo)return m.motivo;
+  if(m.obs){var x=/Motivo:\s*([^—\[\n]+)/i.exec(m.obs);if(x)return x[1].trim();}
+  return "";
+}
+/* Agrega motivos das saídas no período */
+function agregarMotivos(dom,start,end){
+  const cont={};let total=0;
+  MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom&&m.data>=start&&m.data<=end).forEach(m=>{
+    let mo=motivoDe(m)||"Não informado";
+    cont[mo]=(cont[mo]||0)+m.qtd;total+=m.qtd;
+  });
+  return {cont:cont,total:total};
+}
+/* Gráfico DONUT (pizza com furo) em SVG */
+function donutSVG(dados,total){
+  const entries=Object.entries(dados).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length||total===0)return `<div class="empty">Sem retiradas com motivo no período.</div>`;
+  const cx=110,cy=110,r=88,rin=52;let ang=-Math.PI/2;
+  let paths="";
+  entries.forEach(([k,v])=>{
+    const frac=v/total,a2=ang+frac*2*Math.PI;
+    const x1=cx+r*Math.cos(ang),y1=cy+r*Math.sin(ang),x2=cx+r*Math.cos(a2),y2=cy+r*Math.sin(a2);
+    const xi1=cx+rin*Math.cos(a2),yi1=cy+rin*Math.sin(a2),xi2=cx+rin*Math.cos(ang),yi2=cy+rin*Math.sin(ang);
+    const large=frac>0.5?1:0;
+    const col=MOTIVO_CORES[k]||"#7a7f8c";
+    paths+=`<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L${xi1.toFixed(1)} ${yi1.toFixed(1)} A${rin} ${rin} 0 ${large} 0 ${xi2.toFixed(1)} ${yi2.toFixed(1)} Z" fill="${col}"><title>${esc(k)}: ${v} (${Math.round(frac*100)}%)</title></path>`;
+    ang=a2;
+  });
+  const legend=entries.map(([k,v])=>`<div style="display:flex;align-items:center;gap:7px;font-size:12.5px;padding:3px 0">
+    <span style="width:11px;height:11px;border-radius:3px;background:${MOTIVO_CORES[k]||"#7a7f8c"};flex:0 0 auto"></span>
+    <span style="flex:1">${esc(k)}</span><b>${v}</b><span style="color:var(--txt-faint)">${Math.round(v/total*100)}%</span></div>`).join("");
+  return `<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;justify-content:center;padding:8px">
+    <svg viewBox="0 0 220 220" width="200" height="200" style="flex:0 0 auto">
+      ${paths}
+      <text x="110" y="104" text-anchor="middle" font-size="30" font-weight="800" fill="#2D3277" font-family="Archivo,sans-serif">${total}</text>
+      <text x="110" y="126" text-anchor="middle" font-size="12" fill="#8b94a3">retiradas</text>
+    </svg>
+    <div style="flex:1;min-width:180px;max-width:280px">${legend}</div>
+  </div>`;
+}
+/* Consumo médio diário de um item, com base em N dias de histórico de saídas */
+function consumoMedioDiario(pid,dias){
+  dias=dias||90;
+  const hoje=today();const ini=addDays(hoje,-dias);
+  const saidas=movOf(pid).filter(m=>m.tipo==="saida"&&m.data>=ini&&m.data<=hoje);
+  const totalSai=saidas.reduce((s,m)=>s+m.qtd,0);
+  return totalSai/dias;
+}
+/* Previsão de necessidade de compra por item */
+function previsaoCompra(dom,horizonteDias){
+  horizonteDias=horizonteDias||30;
+  return prodOf(dom).map(p=>{
+    const saldo=atual(p.id);
+    const cmd=consumoMedioDiario(p.id,90);
+    const previsto=cmd*horizonteDias; // consumo estimado no horizonte
+    const min=getMin(p.id);
+    // Necessidade: cobrir consumo do horizonte + manter o mínimo, descontando saldo
+    const necessidade=Math.max(0,Math.ceil(previsto+min-saldo));
+    const diasRestantes=cmd>0?Math.floor(saldo/cmd):Infinity;
+    const custo=custoUnit(p.id);
+    return {p:p,saldo:saldo,cmd:cmd,previsto:Math.round(previsto),min:min,necessidade:necessidade,diasRestantes:diasRestantes,custo:custo,ca:caAtualProduto(p.id)};
+  }).filter(x=>x.cmd>0||x.saldo>0);
+}
+function addDays(d,n){const dt=new Date(d+"T00:00:00");dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10);}
+
+/* Mini gráfico de barras horizontais (top itens) */
+function topItensSaida(dom,start,end,limite){
+  limite=limite||5;
+  const cont={};
+  MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom&&m.data>=start&&m.data<=end).forEach(m=>{
+    cont[m.produtoId]=(cont[m.produtoId]||0)+m.qtd;
+  });
+  return Object.entries(cont).map(([pid,q])=>{
+    const p=PRODUTOS.find(x=>x.id===pid);return {nome:p?p.descricao:pid,qtd:q};
+  }).sort((a,b)=>b.qtd-a.qtd).slice(0,limite);
+}
+/* Barras verticais estilo dashboard (top 5 EPIs) */
+function colBarsSVG(itens){
+  if(!itens.length)return `<div class="empty">Sem entregas no período.</div>`;
+  const max=Math.max(...itens.map(i=>i.qtd),1);
+  const W=Math.max(itens.length*120,360),H=230,pb=54,pt=30;
+  const bw=58,gap=(W-itens.length*bw)/(itens.length+1);
+  let bars="";
+  itens.forEach((it,i)=>{
+    const x=gap+i*(bw+gap),h=(it.qtd/max)*(H-pb-pt),y=H-pb-h;
+    bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="4" fill="#2D3277"><title>${esc(it.nome)}: ${it.qtd}</title></rect>`;
+    bars+=`<text x="${(x+bw/2).toFixed(1)}" y="${(y-7).toFixed(1)}" text-anchor="middle" font-size="14" font-weight="800" fill="#2D3277" font-family="Archivo,sans-serif">${it.qtd}</text>`;
+    const nome=it.nome.length>16?it.nome.slice(0,15)+"…":it.nome;
+    bars+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-pb+18}" text-anchor="middle" font-size="11" fill="#5b6675">${esc(nome)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${bars}</svg>`;
+}
+/* Entregas por mês (linha) no ano corrente do relatório */
+function entregasPorMes(dom,ano){
+  const arr=new Array(12).fill(0);
+  MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom&&m.data.slice(0,4)===String(ano)).forEach(m=>{
+    const mes=Number(m.data.slice(5,7))-1;if(mes>=0&&mes<12)arr[mes]+=m.qtd;
+  });
+  return arr;
+}
+function monthLineSVG(valores){
+  const meses=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const W=900,H=220,pl=36,pr=18,pt=24,pb=36,iw=W-pl-pr,ih=H-pt-pb;
+  const max=Math.max(...valores,1);
+  const X=i=>pl+(i/11)*iw, Y=v=>pt+ih-(v/max)*ih;
+  const pts=valores.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const area=`${pl},${(pt+ih).toFixed(1)} ${pts} ${(W-pr)},${(pt+ih).toFixed(1)}`;
+  let dots="",labs="";
+  valores.forEach((v,i)=>{
+    dots+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3" fill="#2D3277"/>`;
+    if(v>0)dots+=`<text x="${X(i).toFixed(1)}" y="${(Y(v)-8).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="#2D3277">${v}</text>`;
+    labs+=`<text x="${X(i).toFixed(1)}" y="${H-pb+18}" text-anchor="middle" font-size="10.5" fill="#8b94a3">${meses[i]}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
+    <defs><linearGradient id="mlFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2D3277" stop-opacity="0.16"/><stop offset="100%" stop-color="#2D3277" stop-opacity="0.01"/></linearGradient></defs>
+    <polygon points="${area}" fill="url(#mlFill)"/>
+    <polyline points="${pts}" fill="none" stroke="#2D3277" stroke-width="2.5" stroke-linejoin="round"/>
+    ${dots}${labs}
+  </svg>`;
+}
+/* Status de C.A. (válido/sem informação) — heurística simples */
+function statusCA(dom){
+  let comCA=0,semCA=0;
+  prodOf(dom).forEach(p=>{const ca=caAtualProduto(p.id);if(ca)comCA++;else semCA++;});
+  return {comCA:comCA,semCA:semCA};
+}
+
+/* ===== DASHBOARD (estilo amostra) ===== */
+function viewDashboard(){
+  const dom=state.dom;
+  const {start,end,periodoLbl}=repRange();
+  _repRange={start,end};
+  const ano=Number((state.repYear)||today().slice(0,4));
+  const {ent,sai,qtdEnt,qtdSai,valEnt}=aggregate(dom,start,end);
+  const totalEntregue=qtdSai;
+  const top5=topItensSaida(dom,start,end,5);
+  const porMes=entregasPorMes(dom,ano);
+  const motivos=agregarMotivos(dom,start,end);
+  const compras=previsaoCompra(dom,30).filter(x=>x.necessidade>0).sort((a,b)=>b.necessidade-a.necessidade);
+  const ca=statusCA(dom);
+  const custoTotal=prodOf(dom).reduce((s,p)=>s+atual(p.id)*custoUnit(p.id),0);
+  const itensEstoque=prodOf(dom).reduce((s,p)=>s+atual(p.id),0);
+  const compraRows=compras.slice(0,12).map(c=>`<tr>
+    <td class="nm">${esc(c.p.descricao)}</td>
+    <td class="n">${c.ca||"—"}</td>
+    <td class="n" style="font-weight:800;color:var(--blue)">${c.necessidade}</td>
+    <td class="n">${c.diasRestantes===Infinity?"—":c.diasRestantes+"d"}</td>
+  </tr>`).join("")||`<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--txt-faint)">Nenhuma compra necessária no momento.</td></tr>`;
+
+  return `
+  <div class="selbar">
+    <div class="fg"><label>Período</label>
+      <div class="seg" id="repSeg">${[["semana","Semanal"],["mes","Mensal"],["ano","Anual"],["periodo","Período"]].map(([p,l])=>`<button data-p="${p}" class="${state.rep===p?"active":""}">${l}</button>`).join("")}</div></div>
+    ${weekOptionsHtml()}
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-left:auto;flex-wrap:wrap">
+      <button class="btn ghost sm" onclick="state.view='relatorios';render()" style="margin-bottom:2px">&#128202; Relatórios detalhados</button>
+      <button class="btn primary sm" onclick="abrirRelatorioVisual()" style="margin-bottom:2px">&#128424; PDF</button>
+    </div>
+  </div>
+
+  <div class="dash-title">DASHBOARD &mdash; ANÁLISE DE ${dom==="safety"?"EPI":"INSUMOS"} · ${esc(periodoLbl)}</div>
+
+  <div class="dash-kpis">
+    <div class="dash-card kpi-big">
+      <div class="ic">&#129489;&#8205;&#127981;</div>
+      <div><div class="lbl">${dom==="safety"?"EPIs entregues":"Itens entregues"}</div><div class="num">${totalEntregue}</div></div>
+    </div>
+    <div class="dash-card kpi-big alt">
+      <div class="ic">&#128230;</div>
+      <div><div class="lbl">Itens em estoque</div><div class="num">${itensEstoque}</div></div>
+    </div>
+    <div class="dash-card kpi-big alt2">
+      <div class="ic">&#128176;</div>
+      <div><div class="lbl">Valor em estoque</div><div class="num" style="font-size:26px">${brl(custoTotal)}</div></div>
+    </div>
+    <div class="dash-card kpi-big alt3">
+      <div class="ic">&#128203;</div>
+      <div><div class="lbl">EPIs com C.A.</div><div class="num">${ca.comCA}<small style="font-size:14px;color:var(--txt-faint)"> / ${ca.comCA+ca.semCA}</small></div></div>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="panel dash-buy">
+      <div class="panel-bar"><h3>&#128722; Necessidade de Compra</h3></div>
+      <div class="scroll-y" style="max-height:340px"><table class="dash-tbl">
+        <thead><tr><th>${dom==="safety"?"EPI":"Item"}</th><th class="n">C.A.</th><th class="n">Qtd sug.</th><th class="n">Dura</th></tr></thead>
+        <tbody>${compraRows}</tbody>
+      </table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-bar"><h3>Motivos das Trocas</h3></div>
+      ${donutSVG(motivos.cont,motivos.total)}
+    </div>
+
+    <div class="panel" style="grid-column:1 / -1">
+      <div class="panel-bar"><h3>Top 5 ${dom==="safety"?"EPIs":"Itens"} Mais Entregues — ${esc(periodoLbl)}</h3></div>
+      <div style="padding:10px 8px">${colBarsSVG(top5)}</div>
+    </div>
+
+    <div class="panel" style="grid-column:1 / -1">
+      <div class="panel-bar"><h3>Entregas Durante o Ano de ${ano}</h3></div>
+      <div style="padding:12px 8px 4px">${monthLineSVG(porMes)}</div>
+    </div>
+  </div>`;
+}
+
 
 /* ================= RELATÓRIO VISUAL (PDF imprimível) ================= */
 function abrirRelatorioVisual(){
   const dom=state.dom;
-  const r=_repRange;const start=r.start,end=r.end;
+  const r=(_repRange&&_repRange.start&&_repRange.end)?_repRange:repRange();
+  const start=r.start,end=r.end;
   const {ent,sai,valEnt,qtdEnt,qtdSai}=aggregate(dom,start,end);
   const porColab={};sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
   const busca=(state.repBusca||"").trim().toLowerCase();
@@ -1470,6 +1787,14 @@ function abrirRelatorioVisual(){
   const alertRowsPDF=alertasPDF.map(a=>`<tr style="background:${a.saldo<=0?"#fbe5e3":"#fff8ee"}"><td class="nm">${a.saldo<=0?"&#9888; ":""}${esc(a.p.descricao)}</td><td class="n">${a.min}</td><td class="n" style="color:${a.saldo<=0?"#d23b30":"#b8860b"};font-weight:800">${a.saldo}</td><td style="color:${a.saldo<=0?"#d23b30":"#b8860b"};font-size:11.5px">${a.saldo<=0?"Repor com urgência":"Programar reposição"}</td></tr>`).join("");
   const alertSectionPDF=alertasPDF.length?`<h2>&#9888; Alertas de Estoque Mínimo (${alertasPDF.length})</h2>
     <table><thead><tr><th>Produto / EPI</th><th class="n">Mínimo</th><th class="n">Saldo atual</th><th>Status</th></tr></thead><tbody>${alertRowsPDF}</tbody></table>`:"";
+
+  // Previsão de compra no PDF
+  const comprasPDF=previsaoCompra(dom,30).filter(c=>c.necessidade>0).sort((a,b)=>b.necessidade-a.necessidade);
+  const compraRowsPDF=comprasPDF.map(c=>`<tr><td class="nm">${esc(c.p.descricao)}</td><td class="n">${c.ca||"—"}</td><td class="n">${c.saldo}</td><td class="n">${c.cmd.toFixed(1)}/dia</td><td class="n" style="font-weight:800;color:#2D3277">${c.necessidade}</td><td class="n">${c.custo>0?brl(c.necessidade*c.custo):"—"}</td></tr>`).join("");
+  const custoComprasPDF=comprasPDF.reduce((s,c)=>s+c.necessidade*c.custo,0);
+  const compraSectionPDF=comprasPDF.length?`<h2>&#128722; Previsão de Compra — próximos 30 dias</h2>
+    <p style="font-size:11px;color:#5b6675;margin:-4px 0 8px">Baseado no consumo médio dos últimos 90 dias e no estoque mínimo configurado.${custoComprasPDF>0?" Investimento estimado: <b>"+brl(custoComprasPDF)+"</b>.":""}</p>
+    <table><thead><tr><th>Produto / EPI</th><th class="n">C.A.</th><th class="n">Saldo</th><th class="n">Consumo</th><th class="n">Qtd sugerida</th><th class="n">Custo est.</th></tr></thead><tbody>${compraRowsPDF}</tbody></table>`:"";
 
   var _mk=document.querySelector(".logo .mark");
   const logoTag=(_mk&&_mk.src)?`<img src="${_mk.src}" style="height:46px">`:`<div style="font-family:Arial;font-weight:800;font-size:20px;color:#2D3277">SMG6 · Estoque</div>`;
@@ -1516,6 +1841,7 @@ function abrirRelatorioVisual(){
       <div class="kpi"><div class="l">Itens movimentados</div><div class="v">${itens.length}</div><div class="m">no período</div></div>
     </div>
     ${alertSectionPDF}
+    ${compraSectionPDF}
     <h2>Entradas, Saídas e Saldo por Item</h2>
     <table>
       <thead><tr><th>Produto / EPI</th><th class="n">Inicial</th><th class="n">Entrou</th><th class="n">Saiu</th><th class="n">Saldo</th><th>Comparativo</th></tr></thead>
@@ -1645,6 +1971,12 @@ function wire(){
     document.querySelectorAll("[data-editmov]").forEach(b=>b.onclick=()=>editMov(b.dataset.editmov));
   }
   if(state.view==="colaboradores"){
+    const cb=document.getElementById("colabBusca");
+    if(cb)cb.oninput=()=>{
+      state.colabBusca=cb.value;
+      clearTimeout(window._colabBuscaT);
+      window._colabBuscaT=setTimeout(()=>{render();setTimeout(()=>{var el=document.getElementById("colabBusca");if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},0);},200);
+    };
     const cd=document.getElementById("colabDropdown");
     if(cd)cd.onchange=()=>{state.colab=cd.value||null;render();};
     document.querySelectorAll("[data-delmov]").forEach(b=>b.onclick=()=>delMov(b.dataset.delmov));
@@ -1662,6 +1994,14 @@ function wire(){
       clearTimeout(window._repBuscaT);
       window._repBuscaT=setTimeout(()=>{render();setTimeout(()=>{var el=document.getElementById("rep_busca");if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},0);},250);
     };
+  }
+  if(state.view==="dashboard"){
+    document.querySelectorAll("#repSeg button").forEach(b=>b.onclick=()=>{state.rep=b.dataset.p;render();});
+    const rm=document.getElementById("rep_month");if(rm)rm.onchange=()=>{state.repMonth=rm.value;render();};
+    const ry=document.getElementById("rep_year");if(ry)ry.onchange=()=>{state.repYear=Number(ry.value);render();};
+    const rw=document.getElementById("rep_week");if(rw)rw.onchange=()=>{state.repWeek=Number(rw.value);render();};
+    const rs=document.getElementById("rep_start");if(rs)rs.onchange=()=>{state.repStart=rs.value;render();};
+    const re=document.getElementById("rep_end");if(re)re.onchange=()=>{state.repEnd=re.value;render();};
   }
 }
 
@@ -1753,7 +2093,7 @@ function formMov(tipo){
   openModal((isSai?"Saída":"Entrada")+" · "+esc(p.descricao),body,
     [{label:"Cancelar",cls:"ghost",act:closeModal},{label:isSai?"Registrar Saída":"Registrar Entrada",cls:isSai?"primary":"green",act:()=>submitMov(tipo)}]);
   setTimeout(()=>{
-    const upd=()=>{if(isSai){const d=document.getElementById("m_disp");if(d)d.value=saldoVar(p.id,val("m_tam"),val("m_cor"));}chk();};
+    const upd=()=>{if(isSai){const d=document.getElementById("m_disp");if(d)d.value=atual(p.id);}chk();};
     ["m_tam","m_cor"].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=upd;});
     if(isSai){const pe=document.getElementById("m_parte"),da=document.getElementById("m_data");if(pe)pe.onchange=chk;if(da)da.onchange=chk;}
     upd();
@@ -1773,7 +2113,7 @@ async function submitMov(tipo){
   if(p.cores&&p.cores.length&&!cor){toast("Selecione a cor/tipo","erro");return;}
   if(isSai){
     const lib=val("m_lib").trim();if(!parte||!lib){toast("Colaborador e liberado por obrigatórios","erro");return;}
-    const saldo=saldoVar(p.id,tam,cor);if(qtd>saldo){toast(`Estoque insuficiente. Disponível: ${saldo}.`,"erro");return;}
+    const saldo=atual(p.id);if(qtd>saldo){toast(`Estoque insuficiente. Disponível: ${saldo}.`,"erro");return;}
     const prev=MOVS.filter(m=>m.tipo==="saida"&&m.produtoId===p.id&&m.parte.trim().toLowerCase()===parte.toLowerCase()&&m.data<=data).sort((a,b)=>b.data>a.data?1:-1)[0];
     if(prev){const d=days(prev.data,data);if(d>=0&&d<ALERTA_DIAS){const ok=await confirmModal("Retirada em intervalo curto",`<b>${esc(parte)}</b> retirou <b>${esc(p.descricao)}</b> em <b>${fmtD(prev.data)}</b> (há ${d} dia${d===1?"":"s"}). Registrar mesmo assim?`,"Registrar");if(!ok)return;}}
     var novaMov={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"saida",data,qtd,tamanho:tam,cor,parte,liberadoPor:lib,obs:val("m_obs").trim()};
@@ -1850,7 +2190,8 @@ function _wz_step1(prods,prefColab){
     +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
     +'<div class="mfield"><label>Dispon&iacute;vel</label><input id="ew_disp" readonly value="&#8212;"></div>'
     +'<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="ew_qtd" min="1" step="1" value="1"></div>'
-    +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: troca, EPI danificado&#8230;"></div>'
+    +'<div class="mfield"><label>Motivo da troca <span class="req">*</span></label><select id="ew_motivo"><option value="">&#8212; selecione &#8212;</option><option value="Novo Colaborador">Novo Colaborador</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
+    +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: detalhe adicional&#8230;"></div>'
     +'</div>';
   openModal("Nova Entrega de EPI \u2014 Etapa 1 de 4",body,[
     {label:"Cancelar",cls:"ghost",act:function(){closeModal();}},
@@ -1872,7 +2213,7 @@ function _wz_step1(prods,prefColab){
     }
     function upd(){
       var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
-      disp.value=pr?saldoVar(pr.id,ts.value,""):"&#8212;";
+      disp.value=pr?atual(pr.id):"&#8212;";
       chk();
     }
     function chk(){
@@ -1909,12 +2250,14 @@ function _wz_validarDados(){
   var data=((document.getElementById("ew_data")||{}).value)||"";
   var tam=((document.getElementById("ew_tam")||{}).value)||"";
   var obs=((document.getElementById("ew_obs")||{}).value)||"";
+  var motivo=((document.getElementById("ew_motivo")||{}).value)||"";
   var p=PRODUTOS.find(function(x){return x.id===prod;});
   if(!colab||!prod||!qtd||qtd<=0||!lib||!data){toast("Preencha todos os campos obrigat\u00f3rios","erro");return;}
+  if(!motivo){toast("Selecione o motivo da troca","erro");return;}
   if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
-  var saldo=saldoVar(prod,tam,"");
+  var saldo=atual(prod);
   if(qtd>saldo){toast("Estoque insuficiente. Dispon\u00edvel: "+saldo+".","erro");return;}
-  EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs};
+  EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs,motivo:motivo};
   _wz_step2();
 }
 
@@ -1935,8 +2278,8 @@ function _wz_step2(){
     +'</div>'
     +'<div style="display:flex;flex-direction:column;align-items:center;gap:12px">'
     +'<input id="wz_cpf" type="text" inputmode="numeric" maxlength="14" autocomplete="off" '
-    +'style="font-size:22px;letter-spacing:4px;text-align:center;width:220px;border:2px solid var(--line);'
-    +'border-radius:10px;padding:14px 10px;font-family:var(--mono)" placeholder="000.000.000-00">'
+    +'style="font-size:20px;letter-spacing:2px;text-align:center;width:100%;max-width:340px;box-sizing:border-box;border:2px solid var(--line);'
+    +'border-radius:10px;padding:14px 12px;font-family:var(--mono)" placeholder="000.000.000-00">'
     +'<div id="cpf_err" style="color:var(--red);font-size:12px;min-height:16px"></div>'
     +'</div>';
   openModal("Nova Entrega de EPI \u2014 Etapa 2 de 4",body,[
@@ -2109,8 +2452,16 @@ async function _wz_finalizar(){
   d.ca=caAtualProduto(p&&p.id);
   var fotoSnap=EPI_WZ.fotoDataUrl||null;
   var assinSnap=EPI_WZ.assinDataUrl||null;
-  var wzMov={id:uid(),_t:Date.now(),produtoId:p.id,dom:"safety",tipo:"saida",
-    data:d.data,qtd:d.qtd,tamanho:d.tam,cor:"",parte:d.colab,liberadoPor:d.lib,obs:d.obs,
+  var movId=uid();
+  var codigoValidacao=gerarCodigoValidacao(movId);
+  d.codigo=codigoValidacao;
+  // Monta a observação persistida incluindo motivo e código de validação
+  var obsPersist=(d.motivo?("Motivo: "+d.motivo):"")
+    +(d.obs?((d.motivo?" — ":"")+d.obs):"")
+    +" [COD: "+codigoValidacao+"]";
+  var wzMov={id:movId,_t:Date.now(),produtoId:p.id,dom:"safety",tipo:"saida",
+    data:d.data,qtd:d.qtd,tamanho:d.tam,cor:"",parte:d.colab,liberadoPor:d.lib,obs:obsPersist,
+    motivo:d.motivo||"",codigo:codigoValidacao,
     temRecibo:true,fotoUrl:fotoSnap,assinUrl:assinSnap};
   // Persistir sem as imagens (JSONP/GET não comporta base64 grande; o backend não guarda imagens)
   var movPersist=Object.assign({},wzMov);delete movPersist.fotoUrl;delete movPersist.assinUrl;
@@ -2177,6 +2528,7 @@ async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
     :'<div class="cell"><label>Tamanho</label><div class="v">—</div></div>';
   var obsCell=d.obs?'<div class="cell full"><label>Observações</label><div class="v">'+d.obs+'</div></div>':'';
   var cpfCell=d.cpf?'<div class="cell"><label>CPF</label><div class="v">'+d.cpf+'</div></div>':'';
+  var motivoCell=d.motivo?'<div class="cell"><label>Motivo da Troca</label><div class="v">'+d.motivo+'</div></div>':'';
   var caEPI=d.ca||caAtualProduto(p&&p.id);
   var caCell=caEPI?'<div class="cell"><label>C.A. (Certificado de Aprovação)</label><div class="v">'+caEPI+'</div></div>':'';
   var fotoBlock=foto
@@ -2231,8 +2583,14 @@ async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
     +'<div class="cell"><label>Quantidade</label><div class="v">'+d.qtd+' '+(p.unidade||'UN')+'</div></div>'
     +'<div class="cell"><label>Data de Entrega</label><div class="v">'+fmtD(d.data)+'</div></div>'
     +'<div class="cell"><label>Liberado por</label><div class="v">'+d.lib+'</div></div>'
+    +motivoCell
     +obsCell
     +'</div></div>'
+    +(d.codigo?'<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;background:linear-gradient(135deg,#2D3277,#3a40a0);color:#fff;border-radius:8px;padding:14px 18px;margin-bottom:16px">'
+      +'<div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;opacity:.8;font-weight:700;margin-bottom:3px">Código de Validação</div>'
+      +'<div style="font-size:22px;font-weight:800;letter-spacing:.08em;font-family:\'Courier New\',monospace">'+d.codigo+'</div></div>'
+      +'<div style="text-align:right;font-size:10.5px;opacity:.85;max-width:230px;line-height:1.5">Use este código para validar a autenticidade deste comprovante de entrega no sistema.</div>'
+      +'</div>':'')
     +'<div style="margin-bottom:16px"><div class="sec-title">Registro Fotográfico e Assinatura</div>'
     +'<div class="media-row">'
     +'<div class="foto-box">'+fotoBlock+'</div>'
@@ -2272,9 +2630,16 @@ async function reemitirRecibo(movId){
   var p=PRODUTOS.find(function(x){return x.id===mv.produtoId;});
   if(!p){toast("Produto não encontrado","erro");return;}
   var colabObj=COLABORADORES.find(function(c){return c.nome===mv.parte;});
+  // Recupera código de validação (campo local ou embutido em obs)
+  var codigo=mv.codigo||"";
+  if(!codigo&&mv.obs){var mcod=/\[COD:\s*([A-Z0-9\-]+)\]/i.exec(mv.obs);if(mcod)codigo=mcod[1];}
+  // Recupera motivo (campo local ou embutido em obs)
+  var motivo=mv.motivo||"";
+  if(!motivo&&mv.obs){var mmot=/Motivo:\s*([^—\[\n]+)/i.exec(mv.obs);if(mmot)motivo=mmot[1].trim();}
   var d={colab:mv.parte,prod:mv.produtoId,qtd:mv.qtd,lib:mv.liberadoPor||"",
     data:mv.data,tam:mv.tamanho||"",obs:mv.obs||"",
-    cpf:colabObj?colabObj.cpf||"":"",ca:caAtualProduto(mv.produtoId)};
+    cpf:colabObj?colabObj.cpf||"":"",ca:caAtualProduto(mv.produtoId),
+    codigo:codigo,motivo:motivo};
   if(!mv.fotoUrl&&!mv.assinUrl){
     toast("PDF do Drive ainda não disponível — gerando comprovante a partir dos dados.","warn");
   }
