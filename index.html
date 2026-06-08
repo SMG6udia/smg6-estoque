@@ -201,6 +201,7 @@
       </span>
       <span id="clock"></span>
       <span id="save" style="font-size:11px;opacity:.85">—</span>
+      <button onclick="atualizarDados()" id="btnAtualizar" title="Recarregar os dados do sistema sem sair" style="background:var(--blue);border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--body)">↻ Atualizar</button>
       <button onclick="doLogout()" style="background:var(--blue);border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--body)">Sair</button>
     </div>
   </header>
@@ -472,6 +473,21 @@ const movOf=pid=>MOVS.filter(m=>m.produtoId===pid);
 function selProd(){return PRODUTOS.find(p=>p.id===state.sel)||null;}
 function atual(pid){return movOf(pid).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
 function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>(m.tamanho||"")===(tam||"")&&(m.cor||"")===(cor||"")).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
+/* Estoque atual de um produto separado por tamanho. Itens de tamanho único retornam 1 linha. */
+function estoquePorTamanho(pid){
+  var p=PRODUTOS.find(function(x){return x.id===pid;});
+  if(!p)return [];
+  var temTam=p.tamanhos&&p.tamanhos.length>0;
+  var map={},ordem=[];
+  function add(t){if(!(t in map)){map[t]=0;ordem.push(t);}}
+  if(temTam){p.tamanhos.forEach(function(t){add(t);});}else{add("Único");}
+  movOf(pid).forEach(function(m){
+    var t=temTam?(m.tamanho||"(sem tam.)"):"Único";
+    add(t);
+    map[t]+=(m.tipo==="entrada"?m.qtd:-m.qtd);
+  });
+  return ordem.map(function(t){return {tamanho:t,saldo:map[t]};});
+}
 function custoUnit(pid){const e=movOf(pid).filter(m=>m.tipo==="entrada"&&m.custoUnit>0);return e.length?e[e.length-1].custoUnit:0;}
 function caAtualProduto(pid){
   if(!pid)return"";
@@ -584,7 +600,7 @@ function showLogin(){
     var el=document.getElementById(id);
     if(el && !el._hasEnter){
       el._hasEnter=true;
-      el.addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+      el.addEventListener("keydown",function(e){if(e.key==="Enter"||e.keyCode===13){e.preventDefault();doLogin();}});
     }
   });
 }
@@ -660,6 +676,26 @@ function doLogout(){
   showLogin();
 }
 
+/* Recarrega todos os dados do sistema (Sheets) sem encerrar a sessão */
+async function atualizarDados(){
+  if(!getToken()){toast("Sessão expirada. Faça login novamente.","erro");doLogout();return;}
+  var btn=document.getElementById("btnAtualizar");
+  var txtOrig=btn?btn.textContent:"";
+  if(btn){btn.disabled=true;btn.textContent="↻ Atualizando…";}
+  try{
+    const ok=await loadAll();
+    try{await loadPins();}catch(e){}
+    if(ok){
+      render();
+      toast("Dados atualizados.","ok");
+    }
+  }catch(e){
+    toast("Erro ao atualizar: "+(e.message||"verifique a conexão"),"erro");
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=txtOrig||"↻ Atualizar";}
+  }
+}
+
 /* ── Gestão de Usuários (Admin) ── */
 function viewUsuarios(){
   if(!isAdmin()){toast("Acesso restrito a administradores","erro");return;}
@@ -714,6 +750,7 @@ function viewUsuariosPanel(){
         +'<td class="num" style="display:flex;gap:4px">'
         +'<button class="btn ghost sm" onclick="_uEditar(\'' + esc(u.email) + '\')">✎ Editar</button>'
         +'<button class="btn danger sm" onclick="_uReset(\'' + esc(u.email) + '\')">↺ Reset Senha</button>'
+        +'<button class="btn danger sm" onclick="_uExcluir(\'' + esc(u.email) + '\')">🗑 Excluir</button>'
         +'</td></tr>';
     }).join("");
     el.innerHTML='<div class="scroll-y" style="max-height:500px"><table>'
@@ -773,6 +810,19 @@ async function _uReset(email){
   var r=await api("resetSenha",{email});
   if(!r.ok){toast("Erro: "+r.error,"erro");return;}
   toast("Senha resetada para SMG6user2026","ok");
+  viewUsuariosPanel();
+}
+
+async function _uExcluir(email){
+  var u=_uCache[email]||null;
+  var nome=u&&u.nome?u.nome:email;
+  var ok=await confirmModal("Excluir Usuário",
+    "Excluir definitivamente o usuário <b>"+esc(nome)+"</b> (<b>"+esc(email)+"</b>)?<br>Esta ação não pode ser desfeita.",
+    "Excluir");
+  if(!ok)return;
+  var r=await api("deleteUsuario",{email:email});
+  if(!r.ok){toast("Erro: "+(r.error||"não foi possível excluir"),"erro");return;}
+  toast("Usuário excluído.","ok");
   viewUsuariosPanel();
 }
 
@@ -959,7 +1009,8 @@ function viewEstoque(){
     detRows=resumoRows;
     const totRetirado=MOVS.filter(m=>m.dom===dom&&m.tipo==="saida").reduce((s,m)=>s+m.qtd,0);
     const totEntrada=MOVS.filter(m=>m.dom===dom&&m.tipo==="entrada").reduce((s,m)=>s+m.qtd,0);
-    totals=`<div class="totals">
+    // Em Safety, não exibir o resumo inferior (Total de Produtos, Entradas, Retirado, Itens e Valor em Estoque)
+    totals=dom==="safety"?"":`<div class="totals">
       <div class="tot"><span class="l">Total de Produtos</span><span class="v">${prods.length}</span></div>
       <div class="tot"><span class="l">Total Entradas</span><span class="v green">+${totEntrada}</span></div>
       <div class="tot"><span class="l">Total Retirado</span><span class="v red">−${totRetirado}</span></div>
@@ -1407,6 +1458,36 @@ function viewRel(){
     ${comprasNec.length?`<div class="scroll-y" style="max-height:380px">${compraRows}</div>`:`<div class="empty">Nenhuma compra prevista. Estoque suficiente para o horizonte de 30 dias.</div>`}
   </div>`;
 
+  // ----- RELATÓRIO DE ESTOQUE POR TAMANHO -----
+  // Para cada item, mostra a quantidade atual em estoque de cada tamanho.
+  // Itens de tamanho único aparecem com uma única linha.
+  let itensTam=prodOf(dom).slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
+  if(state.repItem)itensTam=itensTam.filter(p=>p.id===state.repItem);
+  if(busca)itensTam=itensTam.filter(p=>p.descricao.toLowerCase().includes(busca));
+  const tamRows=itensTam.map(p=>{
+    const linhas=estoquePorTamanho(p.id);
+    const totalItem=linhas.reduce((s,l)=>s+l.saldo,0);
+    const chips=linhas.map(l=>{
+      const cor=l.saldo<=0?"var(--red)":"var(--blue)";
+      const bg=l.saldo<=0?"var(--red-bg)":"#eef0fb";
+      return `<span style="display:inline-flex;align-items:center;gap:6px;background:${bg};border-radius:7px;padding:4px 10px;font-size:12.5px">
+        <b>${esc(l.tamanho)}</b><span style="font-family:var(--mono);font-weight:700;color:${cor}">${l.saldo}</span></span>`;
+    }).join("");
+    return `<div class="itembar">
+      <div class="top">
+        <div class="nm">${esc(p.descricao)}${(p.tamanhos&&p.tamanhos.length)?"":'<span style="font-size:11px;color:var(--txt-faint);margin-left:6px">tamanho único</span>'}</div>
+        <div class="sd" style="color:${totalItem<=0?"var(--red)":"var(--blue)"}">${totalItem}<small> total</small></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0 2px">${chips}</div>
+    </div>`;
+  }).join("") || `<div class="empty">Nenhum item para exibir.${busca||state.repItem?" Ajuste o filtro.":""}</div>`;
+  const tamanhoBlock=`<div class="panel" style="grid-column:1 / -1">
+    <div class="panel-bar"><h3>&#128207; Estoque por Tamanho</h3>
+      <div class="right" style="font-size:12px;color:var(--txt-faint)">Quantidade atual em estoque de cada tamanho por item</div>
+    </div>
+    <div class="scroll-y" style="max-height:480px">${tamRows}</div>
+  </div>`;
+
   return `
   <div class="selbar">
     <div class="fg"><label>Tipo de relatório</label>
@@ -1428,6 +1509,7 @@ function viewRel(){
   </div>
   ${alertBlock}
   ${compraBlock}
+  ${tamanhoBlock}
   <div class="rep-grid" style="margin-top:12px">
     ${evoBlock}
     ${motivoBlock}
@@ -1538,7 +1620,7 @@ function configurarMinimos(){
 }
 
 /* ===== ANÁLISES: motivos, top itens, previsão de demanda ===== */
-const MOTIVO_CORES={"Novo Colaborador":"#2D3277","Dano":"#d23b30","Perda":"#b8860b","Desgaste":"#1f9d55","Outro":"#7a7f8c"};
+const MOTIVO_CORES={"Primeiro Item":"#2D3277","Novo Colaborador":"#2D3277","Dano":"#d23b30","Perda":"#b8860b","Desgaste":"#1f9d55","Outro":"#7a7f8c"};
 /* Extrai o motivo de uma movimentação (campo direto ou parse de obs) */
 function motivoDe(m){
   if(m.motivo)return m.motivo;
@@ -2093,7 +2175,14 @@ function formMov(tipo){
   openModal((isSai?"Saída":"Entrada")+" · "+esc(p.descricao),body,
     [{label:"Cancelar",cls:"ghost",act:closeModal},{label:isSai?"Registrar Saída":"Registrar Entrada",cls:isSai?"primary":"green",act:()=>submitMov(tipo)}]);
   setTimeout(()=>{
-    const upd=()=>{if(isSai){const d=document.getElementById("m_disp");if(d)d.value=atual(p.id);}chk();};
+    const upd=()=>{if(isSai){const d=document.getElementById("m_disp");if(d){
+        const tamSel=(p.tamanhos&&p.tamanhos.length)?val("m_tam"):"";
+        const corSel=(p.cores&&p.cores.length)?val("m_cor"):"";
+        // Mostra o saldo do tamanho/cor selecionado, não o total
+        d.value=((p.tamanhos&&p.tamanhos.length)||(p.cores&&p.cores.length))
+          ?((p.tamanhos&&p.tamanhos.length&&!tamSel)?"\u2014":saldoVar(p.id,tamSel,corSel))
+          :atual(p.id);
+      }}chk();};
     ["m_tam","m_cor"].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=upd;});
     if(isSai){const pe=document.getElementById("m_parte"),da=document.getElementById("m_data");if(pe)pe.onchange=chk;if(da)da.onchange=chk;}
     upd();
@@ -2113,7 +2202,9 @@ async function submitMov(tipo){
   if(p.cores&&p.cores.length&&!cor){toast("Selecione a cor/tipo","erro");return;}
   if(isSai){
     const lib=val("m_lib").trim();if(!parte||!lib){toast("Colaborador e liberado por obrigatórios","erro");return;}
-    const saldo=atual(p.id);if(qtd>saldo){toast(`Estoque insuficiente. Disponível: ${saldo}.`,"erro");return;}
+    const usaVar=(p.tamanhos&&p.tamanhos.length)||(p.cores&&p.cores.length);
+    const saldo=usaVar?saldoVar(p.id,tam,cor):atual(p.id);
+    if(qtd>saldo){toast(`Estoque insuficiente. Disponível${usaVar?` para ${[tam,cor].filter(Boolean).join(" / ")}`:""}: ${saldo}.`,"erro");return;}
     const prev=MOVS.filter(m=>m.tipo==="saida"&&m.produtoId===p.id&&m.parte.trim().toLowerCase()===parte.toLowerCase()&&m.data<=data).sort((a,b)=>b.data>a.data?1:-1)[0];
     if(prev){const d=days(prev.data,data);if(d>=0&&d<ALERTA_DIAS){const ok=await confirmModal("Retirada em intervalo curto",`<b>${esc(parte)}</b> retirou <b>${esc(p.descricao)}</b> em <b>${fmtD(prev.data)}</b> (há ${d} dia${d===1?"":"s"}). Registrar mesmo assim?`,"Registrar");if(!ok)return;}}
     var novaMov={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"saida",data,qtd,tamanho:tam,cor,parte,liberadoPor:lib,obs:val("m_obs").trim()};
@@ -2190,7 +2281,7 @@ function _wz_step1(prods,prefColab){
     +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
     +'<div class="mfield"><label>Dispon&iacute;vel</label><input id="ew_disp" readonly value="&#8212;"></div>'
     +'<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="ew_qtd" min="1" step="1" value="1"></div>'
-    +'<div class="mfield"><label>Motivo da troca <span class="req">*</span></label><select id="ew_motivo"><option value="">&#8212; selecione &#8212;</option><option value="Novo Colaborador">Novo Colaborador</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
+    +'<div class="mfield"><label>Motivo da troca <span class="req">*</span></label><select id="ew_motivo"><option value="">&#8212; selecione &#8212;</option><option value="Primeiro Item">Primeiro Item</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
     +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: detalhe adicional&#8230;"></div>'
     +'</div>';
   openModal("Nova Entrega de EPI \u2014 Etapa 1 de 4",body,[
@@ -2213,7 +2304,14 @@ function _wz_step1(prods,prefColab){
     }
     function upd(){
       var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
-      disp.value=pr?atual(pr.id):"&#8212;";
+      if(!pr){disp.value="\u2014";chk();return;}
+      // Se o produto tem tamanhos, mostra o saldo do TAMANHO selecionado (não o total)
+      if(pr.tamanhos&&pr.tamanhos.length){
+        var tamSel=ts?ts.value:"";
+        disp.value=tamSel?saldoVar(pr.id,tamSel,""):"\u2014";
+      }else{
+        disp.value=atual(pr.id);
+      }
       chk();
     }
     function chk(){
@@ -2255,8 +2353,8 @@ function _wz_validarDados(){
   if(!colab||!prod||!qtd||qtd<=0||!lib||!data){toast("Preencha todos os campos obrigat\u00f3rios","erro");return;}
   if(!motivo){toast("Selecione o motivo da troca","erro");return;}
   if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
-  var saldo=atual(prod);
-  if(qtd>saldo){toast("Estoque insuficiente. Dispon\u00edvel: "+saldo+".","erro");return;}
+  var saldo=(p&&p.tamanhos&&p.tamanhos.length)?saldoVar(prod,tam,""):atual(prod);
+  if(qtd>saldo){toast("Estoque insuficiente. Dispon\u00edvel"+((p&&p.tamanhos&&p.tamanhos.length)?(" no tamanho "+tam):"")+": "+saldo+".","erro");return;}
   EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs,motivo:motivo};
   _wz_step2();
 }
@@ -2345,7 +2443,7 @@ function _wz_step3(){
     {label:"Pr\u00f3ximo: Assinatura \u2192",cls:"primary",act:_wz_validarFoto}
   ]);
   setTimeout(function(){
-    navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false})
+    navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:640},height:{ideal:480}},audio:false})
     .then(function(s){EPI_WZ.stream=s;var v=document.getElementById("wz_video");if(v)v.srcObject=s;})
     .catch(function(e){
       var err=document.getElementById("cam_err");
@@ -2379,7 +2477,7 @@ function _wz_recapturar(){
   var fp=document.getElementById("wz_foto_prev");if(fp)fp.style.display="none";
   var sb=document.getElementById("wz_snap_btn");if(sb)sb.style.display="inline-flex";
   var rc=document.getElementById("wz_recapture");if(rc)rc.style.display="none";
-  navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false})
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false})
     .then(function(s){EPI_WZ.stream=s;var v=document.getElementById("wz_video");if(v){v.srcObject=s;v.style.display="block";}})
     .catch(function(){});
 }
@@ -2754,6 +2852,20 @@ function driveSetStatus(s){
         render();
       });
     }
+    /* Login com tecla Enter — vincula já no carregamento da página
+       (a tela de login aparece por padrão, antes de qualquer logout). */
+    ["li_email","li_senha"].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el && !el._hasEnter){
+        el._hasEnter=true;
+        el.addEventListener("keydown",function(e){
+          if(e.key==="Enter"||e.keyCode===13){e.preventDefault();doLogin();}
+        });
+      }
+    });
+    var liEmail=document.getElementById("li_email");
+    var ls=document.getElementById("login-screen");
+    if(liEmail && ls && ls.style.display!=="none"){try{liEmail.focus();}catch(e){}}
   }
   if(document.readyState==="loading"){
     document.addEventListener("DOMContentLoaded",bind);
