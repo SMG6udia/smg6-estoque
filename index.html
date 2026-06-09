@@ -773,8 +773,8 @@ function _uForm(u){
     +'<input id="uf_nome" value="'+(u?esc(u.nome||""):"")+'"></div>'
     +'<div class="mfield full"><label>E-mail @mercadolivre.com <span class="req">*</span></label>'
     +'<input id="uf_email" type="email" value="'+(u?esc(u.email):"")+'"></div>'
-    +'<div class="mfield"><label>Contato / Telefone</label>'
-    +'<input id="uf_contato" value="'+(u?esc(u.contato||""):"")+'"></div>'
+    +'<div class="mfield"><label>Contato / Celular</label>'
+    +'<input id="uf_contato" value="'+(u?esc(u.contato||""):"")+'" placeholder="(xx) XXXXX-XXXX" maxlength="16" oninput="maskCelular(this)"></div>'
     +'<div class="mfield"><label>Usuário (login)</label><input id="uf_usuario" value="'+(u?esc(u.usuario||"")+"":"")+'" placeholder="Ex: joao.silva"></div>'
     +'<div class="mfield"><label>Nível de Acesso <span class="req">*</span></label>'
     +'<select id="uf_nivel">'+niveis.map(function(n){return'<option value="'+n+'"'+(u&&u.nivel===n?" selected":"")+'>'+n+'</option>';}).join("")+'</select></div>'
@@ -828,11 +828,31 @@ async function _uExcluir(email){
 
 function _uHistorico(){
   if(!isAdmin()){toast("Acesso restrito","erro");return;}
-  var body='<div id="hist-list"><div class="loading">Carregando…</div></div>';
+  var anoAtual=new Date().getFullYear();
+  var anosOpts=[anoAtual,anoAtual-1,anoAtual-2].map(a=>`<option value="${a}">${a}</option>`).join("");
+  var mesesOpts='<option value="">Todos os meses</option>'+["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join("");
+  var filtroHtml=`<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line-soft)">
+    <div class="fg"><label>Ano</label><select id="hist_ano">${anosOpts}</select></div>
+    <div class="fg"><label>Mês</label><select id="hist_mes">${mesesOpts}</select></div>
+    <button class="btn primary sm" onclick="_uHistoricoFiltrar()">Filtrar</button>
+  </div>`;
+  var body=filtroHtml+'<div id="hist-list"><div class="loading">Carregando…</div></div>';
   openModal("Histórico de Acesso",body,[{label:"Fechar",cls:"ghost",act:closeModal}]);
   api("getHistoricoAcesso",null,true).then(function(r){
+    window._histData=r;
+    _uHistoricoRender(r,String(anoAtual),"");
+  });
+}
+
+function _uHistoricoFiltrar(){
+  var ano=(document.getElementById("hist_ano")||{}).value||"";
+  var mes=(document.getElementById("hist_mes")||{}).value||"";
+  _uHistoricoRender(window._histData,ano,mes);
+}
+
+function _uHistoricoRender(r,ano,mes){
     var el=document.getElementById("hist-list");if(!el)return;
-    if(!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r.error)+'</div>';return;}
+    if(!r||!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r?r.error:"sem dados")+'</div>';return;}
     if(!r.data||!r.data.length){el.innerHTML='<div class="empty">Nenhum registro.</div>';return;}
     var acaoLabel={
       'login':'🔑 Login',
@@ -848,7 +868,13 @@ function _uHistorico(){
       'saveDesligado':'⚠ Colaborador Desligado',
       'getAll':'📂 Acesso ao Sistema'
     };
-    var rows=r.data.slice(0,300).map(function(h){
+    var dados=r.data.filter(function(h){
+      if(!h.ts)return true;
+      if(ano&&!h.ts.startsWith(ano))return false;
+      if(mes&&!(h.ts.slice(5,7)===mes))return false;
+      return true;
+    });
+    var rows=dados.slice(0,500).map(function(h){
       var lbl=acaoLabel[h.acao]||h.acao||'—';
       var chipCol=h.acao==='login'?'sai':h.acao.includes('delete')||h.acao.includes('Exclu')?'desl':'tam';
       return '<tr>'
@@ -856,11 +882,11 @@ function _uHistorico(){
         +'<td><b>'+esc(h.nome||h.email)+'</b><br><span style="font-size:10px;color:var(--txt-faint)">'+esc(h.email)+'</span></td>'
         +'<td><span class="chip '+chipCol+'">'+lbl+'</span></td>'
         +'<td style="font-size:12px;color:var(--txt-dim)">'+esc(h.detalhes||"")+'</td></tr>';
-    }).join("")||'<tr><td colspan="4"><div class="empty">Nenhum registro ainda.</div></td></tr>';
-    el.innerHTML='<div style="max-height:460px;overflow:auto"><table style="font-size:12.5px">'
+    }).join("")||'<tr><td colspan="4"><div class="empty">Nenhum registro para o período selecionado.</div></td></tr>';
+    el.innerHTML='<div style="font-size:11px;color:var(--txt-faint);margin-bottom:8px">'+dados.length+' registro(s) encontrado(s)</div>'
+      +'<div style="max-height:400px;overflow:auto"><table style="font-size:12.5px">'
       +'<thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>';
-  });
 }
 
 function _uTrocaSenha(){
@@ -971,7 +997,10 @@ function viewEstoque(){
 
   let detRows,totals;
   if(sel){
-    const ms=movOf(sel.id).slice().sort((a,b)=>b.data>a.data?1:(b.data<a.data?-1:((b._t||0)-(a._t||0))));
+    const filtroTipo=state.estoqueFiltraTipo||"todos";
+    let ms=movOf(sel.id).slice().sort((a,b)=>b.data>a.data?1:(b.data<a.data?-1:((b._t||0)-(a._t||0))));
+    if(filtroTipo==="entrada")ms=ms.filter(m=>m.tipo==="entrada");
+    else if(filtroTipo==="saida")ms=ms.filter(m=>m.tipo==="saida");
     detRows=ms.length?ms.map(mv=>`<tr>
       <td class="num">${fmtD(mv.data)}</td>
       <td>${mv.tipo==="entrada"?`<span class="chip ent">Entrada</span>`:`<span class="chip sai">Saída</span>`}</td>
@@ -1020,7 +1049,7 @@ function viewEstoque(){
 
   const tableHeader=sel
     ?`<thead><tr><th>Data</th><th>Tipo</th><th>${dom==="safety"?"Colaborador / Fornecedor":"Destino / Fornecedor"}</th><th>Tamanho</th><th>Cor</th><th class="num">Qtde.</th><th class="num">Custo</th><th>Observações</th><th></th></tr></thead>`
-    :`<thead><tr><th>Produto</th><th>Tipo/Modelo</th><th class="num">Saldo</th><th class="num">Custo Unit.</th><th class="num">Valor Total</th></tr></thead>`;
+    :`<thead><tr><th>Produto</th><th>Categoria</th><th class="num">Saldo</th><th class="num">Custo Unit.</th><th class="num">Valor Total</th></tr></thead>`;
 
   // Toolbar de produto: só no contexto do produto selecionado (lista suspensa de Safety/Insumos)
   const prodToolbar=`
@@ -1039,6 +1068,12 @@ function viewEstoque(){
   <div class="selbar">
     <div class="fg grow"><label>Produto · ${dom==="safety"?"Safety":"Insumos"}</label>
       <select id="prodSel">${prodOpts}</select></div>
+    ${hasSel?`<div class="fg"><label>Filtrar por Tipo</label>
+      <div class="seg" id="estoqueFilSeg">
+        <button data-ft="todos" class="${(state.estoqueFiltraTipo||"todos")==="todos"?"active":""}">Todos</button>
+        <button data-ft="entrada" class="${state.estoqueFiltraTipo==="entrada"?"active":""}">Entradas</button>
+        <button data-ft="saida" class="${state.estoqueFiltraTipo==="saida"?"active":""}">Saídas</button>
+      </div></div>`:""}
   </div>
   <div class="toolbar">
     <button class="tbtn tb-green" data-act="entrada" ${hasSel?"":"disabled"}><span class="ic">↓</span> Entrada no Estoque <span class="k">F5</span></button>
@@ -1169,10 +1204,13 @@ function viewDesligados(){
     <td><b>${esc(n)}</b></td>
     <td><span class="chip desl">Desligado</span></td>
     <td class="num">${MOVS.filter(m=>m.tipo==="saida"&&m.parte===n).length}</td>
-    <td><button class="btn ghost sm" onclick="state.histColab='${esc(n)}';render()">📋 Histórico</button></td>
+    <td style="display:flex;gap:6px">
+      <button class="btn ghost sm" onclick="state.histColab='${esc(n)}';render()">📋 Histórico</button>
+      <button class="btn danger sm" onclick="excluirDesligado('${esc(n)}')">🗑 Excluir</button>
+    </td>
   </tr>`).join("") || `<tr><td colspan="4"><div class="empty">Nenhum desligado registrado.</div></td></tr>`;
   return `<div class="panel">
-    <div class="panel-bar"><h3>Colaboradores Desligados</h3></div>
+    <div class="panel-bar"><h3>Colaboradores Desligados</h3><div class="right"><button class="btn danger sm" onclick="excluirTodosDesligados()">🗑 Limpar Todos</button></div></div>
     <div class="scroll-y"><table>
       <thead><tr><th>Nome</th><th>Status</th><th class="num">Registros</th><th>Ação</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -1180,15 +1218,35 @@ function viewDesligados(){
   </div>`;
 }
 
-/* ── Cadastro de Colaboradores ── */
+/* ── Excluir desligado ── */
+async function excluirDesligado(nome){
+  const ok=await confirmModal("Excluir Desligado",`Excluir <b>${esc(nome)}</b> da lista de desligados? Os registros de movimentação não serão apagados.`,"Excluir");
+  if(!ok)return;
+  DESLIGADOS=DESLIGADOS.filter(n=>n!==nome);
+  const r=await api("deleteDesligado",{nome});
+  if(r&&r.ok){toast("Colaborador excluído da lista.","ok");}else{toast("Excluído localmente. Verifique a planilha.","warn");}
+  render();
+}
+async function excluirTodosDesligados(){
+  const todos=[...new Set([...COLAB_PLANILHA_DESLIGADOS,...DESLIGADOS])];
+  if(!todos.length){toast("Nenhum desligado para excluir.","warn");return;}
+  const ok=await confirmModal("Limpar Todos os Desligados",`Isso removerá <b>${todos.length}</b> colaborador(es) da lista de desligados. Os registros de movimentação não serão apagados. Deseja continuar?`,"Limpar Todos");
+  if(!ok)return;
+  DESLIGADOS=[];
+  const r=await api("deleteAllDesligados",{});
+  if(r&&r.ok){toast("Lista de desligados limpa.","ok");}else{toast("Excluído localmente. Verifique a planilha.","warn");}
+  render();
+}
+
+
 function formCadastroColab(colab){
   var isNew=!colab;
   var c=colab||{};
   var body='<div class="mgrid">'
     +'<div class="mfield full"><label>Nome Completo <span class="req">*</span></label>'
     +'<input id="cc_nome" value="'+(c.nome||"")+'"></div>'
-    +'<div class="mfield"><label>Contato / Telefone</label>'
-    +'<input id="cc_contato" value="'+(c.contato||"")+'"></div>'
+    +'<div class="mfield"><label>Contato / Celular</label>'
+    +'<input id="cc_contato" value="'+(c.contato||"")+'" placeholder="(xx) XXXXX-XXXX" maxlength="16" oninput="maskCelular(this)"></div>'
     +'<div class="mfield"><label>CPF <span class="req">*</span></label>'
     +'<input id="cc_cpf" type="text" inputmode="numeric" maxlength="14" value="'+(c.cpf||"")+'" placeholder="000.000.000-00"></div>'
     +'<div class="mfield"><label>Status</label>'
@@ -1846,8 +1904,24 @@ function abrirRelatorioVisual(){
   const maxBar=Math.max(1,...itens.map(i=>Math.max(i.ent,i.sai)));
   const periodoLbl=document.querySelector(".stat .l")?document.querySelector(".stat .l").textContent:"Período";
 
+  // Montar linhas com detalhamento por tamanho
   const itemRows=itens.map(i=>{
     const eW=Math.round(i.ent/maxBar*100),sW=Math.round(i.sai/maxBar*100);
+    // Buscar produto para verificar tamanhos
+    const prod=PRODUTOS.find(p=>p.descricao===i.nome&&p.dom===dom);
+    const temTamanhos=prod&&prod.tamanhos&&prod.tamanhos.length>0;
+    let tamRows="";
+    if(temTamanhos){
+      prod.tamanhos.forEach(tam=>{
+        const entsTam=ent.filter(m=>m.produtoId===prod.id&&m.tamanho===tam).reduce((s,m)=>s+m.qtd,0);
+        const saisTam=sai.filter(m=>m.produtoId===prod.id&&m.tamanho===tam).reduce((s,m)=>s+m.qtd,0);
+        const iniTam=MOVS.filter(m=>m.produtoId===prod.id&&m.tamanho===tam&&m.data<start).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);
+        const fimTam=iniTam+entsTam-saisTam;
+        if(entsTam||saisTam||fimTam){
+          tamRows+=`<tr style="background:#f9fafb"><td style="padding-left:24px;color:#5b6675;font-size:11.5px">↳ <b>${esc(tam)}</b></td><td class="n ini" style="font-size:11.5px">${iniTam}</td><td class="n ent" style="font-size:11.5px">+${entsTam}</td><td class="n sai" style="font-size:11.5px">−${saisTam}</td><td class="n fim" style="font-size:11.5px;${fimTam<=0?"color:#d23b30":""}">${fimTam}</td><td></td></tr>`;
+        }
+      });
+    }
     return `<tr>
       <td class="nm">${esc(i.nome)}${i.ca?`<span class="ca">CA ${esc(i.ca)}</span>`:""}</td>
       <td class="n ini">${i.ini}</td>
@@ -1858,7 +1932,7 @@ function abrirRelatorioVisual(){
         <div class="b"><span class="be" style="width:${i.ent?Math.max(eW,4):0}%"></span></div>
         <div class="b"><span class="bs" style="width:${i.sai?Math.max(sW,4):0}%"></span></div>
       </td>
-    </tr>`;
+    </tr>${tamRows}`;
   }).join("")||`<tr><td colspan="6" style="text-align:center;padding:30px;color:#888">Sem dados no período.</td></tr>`;
 
   const topColab=Object.entries(porColab).sort((a,b)=>b[1]-a[1]).slice(0,15);
@@ -1931,6 +2005,24 @@ function abrirRelatorioVisual(){
     </table>
     ${dom==="safety"?`<h2>Colaboradores que mais retiraram</h2>
     <table><thead><tr><th style="width:50px">#</th><th>Colaborador</th><th class="n">Itens retirados</th></tr></thead><tbody>${colabRows}</tbody></table>`:""}
+    <h2>&#128196; Movimentações do Período</h2>
+    <table>
+      <thead><tr><th>Data</th><th>Tipo</th><th>Produto / EPI</th><th>${dom==="safety"?"Colaborador":"Destino / Fornecedor"}</th><th>Tamanho</th><th class="n">Qtd</th><th>Liberado por / Usuário</th><th>Observações</th></tr></thead>
+      <tbody>${[...ent,...sai].sort((a,b)=>b.data>a.data?1:(b.data<a.data?-1:0)).map(m=>{
+        const pr=PRODUTOS.find(x=>x.id===m.produtoId);
+        return `<tr style="${m.tipo==='entrada'?'background:#f5fdf8':''}">
+          <td style="white-space:nowrap;font-size:11.5px">${fmtD(m.data)}</td>
+          <td><span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:10.5px;font-weight:700;${m.tipo==='entrada'?'background:#e3f5ea;color:#1f9d55':'background:#e8e9f5;color:#2D3277'}">${m.tipo==='entrada'?'Entrada':'Saída'}</span></td>
+          <td style="font-weight:600">${esc(pr?pr.descricao:m.produtoId)}</td>
+          <td>${esc(m.parte||'—')}</td>
+          <td>${m.tamanho?`<span style="background:#f1f4f8;padding:1px 6px;border-radius:8px;font-size:11px">${esc(m.tamanho)}</span>`:'—'}</td>
+          <td class="n" style="${m.tipo==='entrada'?'color:#1f9d55':'color:#d23b30'};font-weight:700">${m.tipo==='entrada'?'+':'−'}${m.qtd}</td>
+          <td style="font-size:11.5px">${esc(m.liberadoPor||m.usuario||'—')}</td>
+          <td style="font-size:11px;color:#5b6675">${esc(m.obs||'')}</td>
+        </tr>`;
+      }).join('')||`<tr><td colspan="8" style="text-align:center;padding:20px;color:#888">Nenhuma movimentação no período.</td></tr>`}
+      </tbody>
+    </table>
     <div class="noprint">
       <button class="btn" onclick="window.print()">&#128424; Imprimir / Salvar PDF</button>
       <button class="btn sec" onclick="window.close()">Fechar</button>
@@ -2048,9 +2140,10 @@ function exportCSV(){
 function wire(){
   document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>act(b.dataset.act));
   if(state.view==="estoque"){
-    const ps=document.getElementById("prodSel");if(ps)ps.onchange=()=>{state.sel=ps.value||null;render();};
+    const ps=document.getElementById("prodSel");if(ps)ps.onchange=()=>{state.sel=ps.value||null;state.estoqueFiltraTipo="todos";render();};
     document.querySelectorAll("[data-delmov]").forEach(b=>b.onclick=()=>delMov(b.dataset.delmov));
     document.querySelectorAll("[data-editmov]").forEach(b=>b.onclick=()=>editMov(b.dataset.editmov));
+    document.querySelectorAll("#estoqueFilSeg button").forEach(b=>b.onclick=()=>{state.estoqueFiltraTipo=b.dataset.ft;render();});
   }
   if(state.view==="colaboradores"){
     const cb=document.getElementById("colabBusca");
@@ -2127,21 +2220,22 @@ function formProduto(prod){
     const cur=prod||{setor:setores[0],descricao:"",unidade:SETORES[dom][setores[0]].un,tamanhos:[...SETORES[dom][setores[0]].tamanhos],cores:[...SETORES[dom][setores[0]].cores]};
     openModal((isNew?"Cadastrar":"Alterar")+" Produto · Insumos",`
       <div class="mgrid">
-        <div class="mfield"><label>Tipo/Modelo <span class="req">*</span></label><select id="p_setor">${setores.map(s=>`<option ${cur.setor===s?"selected":""}>${s}</option>`).join("")}</select></div>
+        <div class="mfield"><label>Produto <span class="req">*</span></label><select id="p_setor">${setores.map(s=>`<option ${cur.setor===s?"selected":""}>${s}</option>`).join("")}</select></div>
         <div class="mfield"><label>Unidade</label><input id="p_un" value="${esc(cur.unidade)}"></div>
-        <div class="mfield full"><label>Descrição <span class="req">*</span></label><input id="p_desc" value="${esc(cur.descricao)}" placeholder="Nome do produto"></div>
+        <div class="mfield full"><label>Descrição</label><input id="p_desc" value="${esc(cur.descricao)}" placeholder="Nome do produto (opcional)"></div>
         <div class="mfield full"><label>Tamanhos (separe por vírgula)</label><input id="p_tam" value="${esc((cur.tamanhos||[]).join(", "))}" placeholder="Ex: A4, A3"></div>
         <div class="mfield full"><label>Cores (separe por vírgula)</label><input id="p_cor" value="${esc((cur.cores||[]).join(", "))}" placeholder="Ex: Branco, Azul"></div>
       </div>`,
       [{label:"Cancelar",cls:"ghost",act:closeModal},
        {label:"Salvar",cls:"primary",act:async()=>{
-         const desc=val("p_desc").trim();if(!desc){toast("Informe a descrição","erro");return;}
          const setor=val("p_setor");
+         const desc=val("p_desc").trim()||setor; // usa o produto como descrição se vazio
          const obj={dom,setor,classificacao:setor,descricao:desc,unidade:val("p_un").trim()||"UN",codRef:"",
            tamanhos:val("p_tam").split(",").map(s=>s.trim()).filter(Boolean),
            cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
          if(isNew){obj.id=uid();PRODUTOS.push(obj);state.sel=obj.id;}else Object.assign(prod,obj);
-         await persistProd();closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
+         const saved=await persistProd(isNew?obj:prod,isNew);if(!saved)return;
+         closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
        }}]);
     setTimeout(()=>{const ss=document.getElementById("p_setor");if(ss)ss.onchange=()=>{const c=SETORES[dom][ss.value];
       document.getElementById("p_un").value=c.un;document.getElementById("p_tam").value=c.tamanhos.join(", ");document.getElementById("p_cor").value=c.cores.join(", ");};},0);
@@ -2241,7 +2335,15 @@ function formEntrega(prefColab){
   if(!prods.length){toast("Cadastre produtos de Safety primeiro","erro");return;}
   EPI_WZ.step=1;EPI_WZ.dados={};EPI_WZ.fotoDataUrl=null;EPI_WZ.assinDataUrl=null;EPI_WZ.pinOk=false;
   if(EPI_WZ.stream){EPI_WZ.stream.getTracks().forEach(t=>t.stop());EPI_WZ.stream=null;}
-  _wz_step1(prods,prefColab);
+  // Carregar usuários se o cache estiver vazio
+  if(!Object.keys(_uCache||{}).length){
+    api("getUsuarios",null).then(function(r){
+      if(r.ok&&r.data){r.data.forEach(function(u){_uCache[u.email]=u;});}
+      _wz_step1(prods,prefColab);
+    });
+  }else{
+    _wz_step1(prods,prefColab);
+  }
 }
 
 /* ── helper: barra de progresso wizard ── */
@@ -2271,11 +2373,22 @@ function _wz_step1(prods,prefColab){
   for(var j=0;j<prods.length;j++){
     prodOpts+='<option value="'+prods[j].id+'">'+esc(prods[j].descricao)+'</option>';
   }
+  var libOpts='<option value="">— selecione —</option>';
+  // Tentar usar lista de usuários do sistema se disponível
+  var usuariosSis=Object.values(_uCache||{}).filter(function(u){return u&&u.ativo!==false;});
+  if(usuariosSis.length){
+    usuariosSis.sort(function(a,b){return (a.nome||"").localeCompare(b.nome||"","pt-BR");}).forEach(function(u){
+      libOpts+='<option value="'+esc(u.nome||u.email)+'">'+esc(u.nome||u.email)+'</option>';
+    });
+  }
+  var libField=usuariosSis.length
+    ?'<div class="mfield"><label>Liberado por <span class="req">*</span></label><select id="ew_lib">'+libOpts+'</select></div>'
+    :'<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="ew_lib" placeholder="Respons&aacute;vel pela entrega"></div>';
   var body=_wz_steps(1)
     +'<div id="movAlert"></div>'
     +'<div class="mgrid">'
     +'<div class="mfield"><label>Data <span class="req">*</span></label><input type="date" id="ew_data" value="'+today()+'"></div>'
-    +'<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="ew_lib" placeholder="Respons&aacute;vel pela entrega"></div>'
+    +libField
     +'<div class="mfield full"><label>Colaborador (recebe) <span class="req">*</span></label><select id="ew_colab">'+colabOpts+'</select></div>'
     +'<div class="mfield full"><label>EPI / Produto <span class="req">*</span></label><select id="ew_prod">'+prodOpts+'</select></div>'
     +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
@@ -2813,13 +2926,14 @@ async function driveSyncSheet(mov,produto){
   }catch(e){}
 }
 
-async function backupManual(){toast("Dados salvos automaticamente no Google Sheets.","ok");}
-function driveSetStatus(s){
-  DRIVE_STATUS=s;
-  var dot=document.getElementById("drive-dot"),lbl=document.getElementById("drive-lbl");
-  if(!dot||!lbl)return;
-  var map={idle:["#8b94a3","Sheets"],syncing:["#f0a500","Salvando…"],ok:["#1f9d55","Sheets ✓"],error:["#d23b30","Sheets ✗"]};
-  var m=map[s]||map.idle;dot.style.background=m[0];lbl.textContent=m[1];
+/* ── Máscara de celular (xx) XXXXX-XXXX ── */
+function maskCelular(el){
+  var v=el.value.replace(/\D/g,'').slice(0,11);
+  if(v.length>10)      el.value='('+v.slice(0,2)+') '+v.slice(2,7)+'-'+v.slice(7);
+  else if(v.length>6)  el.value='('+v.slice(0,2)+') '+v.slice(2,6)+'-'+v.slice(6);
+  else if(v.length>2)  el.value='('+v.slice(0,2)+') '+v.slice(2);
+  else if(v.length>0)  el.value='('+v;
+  else el.value=v;
 }
 
 
