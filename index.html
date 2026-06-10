@@ -278,7 +278,7 @@ const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","
 const MESES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const ALERTA_DIAS=15;
 /* ── Google Sheets / Apps Script ── */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz8SW4IpDchJBJ1S8EEmcyTWhs-TtUPicm-a7VqC1TJ8TD2fpGEHZ3iwRCU9sdZ01gj-g/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwTxP0Xs_-PjXtmwG22sKLHimrD7T9R5kK7ol5mPfy4W8xMzfidlwTY3Ja0bVNBGX7D7g/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
 const DRIVE_FOLDER_EPI = "1xIq3muw068guiHAPAEe17NA_pyjUTpPg";
 let   DRIVE_STATUS = "idle";
 
@@ -294,9 +294,10 @@ function api(action, payload, silent) {
     const cbName = "__smg6cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
 
     // Timeout de 20 segundos
+    var isReadAction = action && (action.indexOf("get") === 0 || action === "getAll");
     const timeout = setTimeout(function() {
       cleanup();
-      if (!silent) driveSetStatus("error");
+      if (!silent && !isReadAction) driveSetStatus("error");
       resolve({ ok: false, error: "Tempo esgotado. Verifique a conexão e a URL do Apps Script." });
     }, 20000);
 
@@ -308,9 +309,14 @@ function api(action, payload, silent) {
     }
 
     // Registrar callback global que o Apps Script vai chamar
+    // Ações de leitura (get*) nunca pintam de vermelho — só mostram ok/error em escrita
     window[cbName] = function(data) {
       cleanup();
-      if (!silent) driveSetStatus(data && data.ok ? "ok" : "error");
+      if (!silent) {
+        if(data && data.ok){ driveSetStatus("ok"); }
+        else if(!isReadAction){ driveSetStatus("error"); }
+        // leitura com erro: mantém estado atual sem pintar vermelho
+      }
       resolve(data || { ok: false, error: "Resposta vazia do servidor." });
     };
 
@@ -325,7 +331,7 @@ function api(action, payload, silent) {
     script.src = url;
     script.onerror = function() {
       cleanup();
-      if (!silent) driveSetStatus("error");
+      if (!silent && !isReadAction) driveSetStatus("error");
       resolve({ ok: false, error: "Erro ao conectar. Verifique se a implantação está ativa e acessível." });
     };
     document.head.appendChild(script);
@@ -580,6 +586,16 @@ function driveSetStatus(s){
   var map={idle:["#8b94a3","Sheets"],syncing:["#f0a500","Salvando…"],ok:["#1f9d55","Sheets ✓"],error:["#d23b30","Sheets ✗"]};
   var m=map[s]||map.idle;
   dot.style.background=m[0];lbl.textContent=m[1];
+  // Após "ok", volta para idle em 3s para não travar o indicador
+  if(s==="ok"){
+    clearTimeout(window._driveOkTimer);
+    window._driveOkTimer=setTimeout(function(){driveSetStatus("idle");},3000);
+  }
+  // Após "error", volta para idle em 8s para não ficar vermelho para sempre
+  if(s==="error"){
+    clearTimeout(window._driveErrTimer);
+    window._driveErrTimer=setTimeout(function(){driveSetStatus("idle");},8000);
+  }
 }
 async function backupManual(){toast("Os dados são salvos automaticamente no Sheets.","ok");}
 
@@ -1222,20 +1238,35 @@ function viewDesligados(){
 async function excluirDesligado(nome){
   const ok=await confirmModal("Excluir Desligado",`Excluir <b>${esc(nome)}</b> da lista de desligados? Os registros de movimentação não serão apagados.`,"Excluir");
   if(!ok)return;
+  // Remove dos dois arrays (dinâmico do Sheets + hardcoded)
   DESLIGADOS=DESLIGADOS.filter(n=>n!==nome);
-  const r=await api("deleteDesligado",{nome});
-  if(r&&r.ok){toast("Colaborador excluído da lista.","ok");}else{toast("Excluído localmente. Verifique a planilha.","warn");}
-  render();
+  const idx=COLAB_PLANILHA_DESLIGADOS.indexOf(nome);
+  if(idx>=0) COLAB_PLANILHA_DESLIGADOS.splice(idx,1);
+  render(); // atualiza tela imediatamente
+  // Persiste no Sheets em background (silent=true para não pintar de vermelho)
+  const r=await api("deleteDesligado",{nome},true);
+  if(r&&r.ok){
+    toast("Colaborador excluído da lista.","ok");
+  }else{
+    toast("Removido localmente. Para excluir da planilha, publique o novo Apps Script.","warn");
+  }
 }
 async function excluirTodosDesligados(){
   const todos=[...new Set([...COLAB_PLANILHA_DESLIGADOS,...DESLIGADOS])];
   if(!todos.length){toast("Nenhum desligado para excluir.","warn");return;}
   const ok=await confirmModal("Limpar Todos os Desligados",`Isso removerá <b>${todos.length}</b> colaborador(es) da lista de desligados. Os registros de movimentação não serão apagados. Deseja continuar?`,"Limpar Todos");
   if(!ok)return;
+  // Limpa os dois arrays
   DESLIGADOS=[];
-  const r=await api("deleteAllDesligados",{});
-  if(r&&r.ok){toast("Lista de desligados limpa.","ok");}else{toast("Excluído localmente. Verifique a planilha.","warn");}
-  render();
+  COLAB_PLANILHA_DESLIGADOS.length=0;
+  render(); // atualiza tela imediatamente
+  // Persiste no Sheets em background (silent=true para não pintar de vermelho)
+  const r=await api("deleteAllDesligados",{},true);
+  if(r&&r.ok){
+    toast("Lista de desligados limpa.","ok");
+  }else{
+    toast("Removido localmente. Para excluir da planilha, publique o novo Apps Script.","warn");
+  }
 }
 
 
