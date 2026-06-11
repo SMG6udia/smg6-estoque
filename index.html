@@ -845,7 +845,7 @@ async function _uExcluir(email){
 function _uHistorico(){
   if(!isAdmin()){toast("Acesso restrito","erro");return;}
   var anoAtual=new Date().getFullYear();
-  var anosOpts=[anoAtual,anoAtual-1,anoAtual-2].map(a=>`<option value="${a}">${a}</option>`).join("");
+  var anosOpts='<option value="">Todos os anos</option>'+[anoAtual,anoAtual-1,anoAtual-2].map(a=>`<option value="${a}">${a}</option>`).join("");
   var mesesOpts='<option value="">Todos os meses</option>'+["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join("");
   var filtroHtml=`<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line-soft)">
     <div class="fg"><label>Ano</label><select id="hist_ano">${anosOpts}</select></div>
@@ -856,7 +856,8 @@ function _uHistorico(){
   openModal("Histórico de Acesso",body,[{label:"Fechar",cls:"ghost",act:closeModal}]);
   api("getHistoricoAcesso",null,true).then(function(r){
     window._histData=r;
-    _uHistoricoRender(r,String(anoAtual),"");
+    // Começar sem filtro de período para mostrar todos os registros
+    _uHistoricoRender(r,"","");
   });
 }
 
@@ -886,8 +887,16 @@ function _uHistoricoRender(r,ano,mes){
     };
     var dados=r.data.filter(function(h){
       if(!h.ts)return true;
-      if(ano&&!h.ts.startsWith(ano))return false;
-      if(mes&&!(h.ts.slice(5,7)===mes))return false;
+      // ts pode vir como "dd/mm/yyyy, hh:mm:ss" (pt-BR) ou "yyyy-mm-dd..."
+      // Extrair ano e mês de forma robusta
+      var tsAno="", tsMes="";
+      var mBr=h.ts.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      var mIso=h.ts.match(/^(\d{4})-(\d{2})/);
+      if(mBr){ tsAno=mBr[3]; tsMes=mBr[2]; }
+      else if(mIso){ tsAno=mIso[1]; tsMes=mIso[2]; }
+      else { tsAno=h.ts.slice(0,4); tsMes=h.ts.slice(5,7); }
+      if(ano && tsAno !== ano) return false;
+      if(mes && tsMes !== mes) return false;
       return true;
     });
     var rows=dados.slice(0,500).map(function(h){
@@ -1039,17 +1048,35 @@ function viewEstoque(){
       <div class="tot"><span class="l">Custo Total do Estoque</span><span class="v blue">${brl(at*cu)}</span></div>
       <div class="tot"><span class="l">Custo Atual da Unidade</span><span class="v">${brl(cu)}</span></div></div>`;
   }else{
-    // Mostrar todos itens com saldo
+    // Mostrar todos itens com saldo + expandir tamanhos
+    if(!state.estoqueExpand) state.estoqueExpand={};
     const todosProd=prods.map(p=>({p,saldo:atual(p.id)}));
     const resumoRows=todosProd.map(({p,saldo})=>{
       const cu=custoUnit(p.id);
-      return `<tr>
-        <td><b>${esc(p.descricao)}</b></td>
+      const tams=(p.tamanhos||[]).filter(Boolean);
+      const expanded=!!state.estoqueExpand[p.id];
+      // linha do tamanho: saldo por tamanho
+      let tamRows="";
+      if(expanded && tams.length){
+        tamRows=tams.map(t=>{
+          const sTam=MOVS.filter(m=>m.produtoId===p.id&&m.tamanho===t).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);
+          return `<tr style="background:var(--bg-soft,#f9fafb)">
+            <td style="padding-left:28px;color:var(--txt-dim);font-size:12px">↳ ${esc(t)}</td>
+            <td></td>
+            <td class="num ${sTam<=0?'qneg':'qpos'}" style="font-size:12px">${sTam}</td>
+            <td class="num" style="font-size:12px">${brl(cu)}</td>
+            <td class="num" style="font-size:12px">${brl(sTam*cu)}</td>
+          </tr>`;
+        }).join("");
+      }
+      const hasTams=tams.length>0;
+      return `<tr style="cursor:${hasTams?"pointer":"default"}" onclick="${hasTams?`toggleEstoqueExpand('${p.id}')`:""}"}>
+        <td><span style="display:inline-block;width:18px;text-align:center;color:var(--blue);font-weight:700;font-size:13px">${hasTams?(expanded?"▾":"▸"):""}</span> <b>${esc(p.descricao)}</b></td>
         <td>${esc(p.setor||"")}</td>
         <td class="num ${saldo<=0?'qneg':'qpos'}">${saldo}</td>
         <td class="num">${brl(cu)}</td>
         <td class="num">${brl(saldo*cu)}</td>
-      </tr>`;
+      </tr>${tamRows}`;
     }).join("") || `<tr><td colspan="5"><div class="empty">Nenhum produto cadastrado.</div></td></tr>`;
     detRows=resumoRows;
     const totRetirado=MOVS.filter(m=>m.dom===dom&&m.tipo==="saida").reduce((s,m)=>s+m.qtd,0);
@@ -1102,7 +1129,13 @@ function viewEstoque(){
   ${totals}`;
 }
 
-/* ================= COLABORADORES ================= */
+function toggleEstoqueExpand(pid){
+  if(!state.estoqueExpand) state.estoqueExpand={};
+  state.estoqueExpand[pid]=!state.estoqueExpand[pid];
+  render();
+}
+
+/* ================= COLABORADORES =================  */
 function viewColabList(){
   const dom=state.dom;
   const btn=dom==="safety"?`<button class="btn primary sm" data-act="novaEntrega">＋ Nova Entrega de EPI</button>`:"";
@@ -1690,20 +1723,63 @@ function configurarMinimos(){
   const dom=state.dom;
   const prods=prodOf(dom).slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
   if(!prods.length){toast("Cadastre produtos antes de definir mínimos.","warn");return;}
-  const rows=prods.map(p=>{
-    const saldo=atual(p.id),min=getMin(p.id);
-    const baixo=min>0&&saldo<=min;
-    return `<div style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line-soft)">
-      <div style="flex:1;font-size:13.5px;font-weight:500">${esc(p.descricao)}<div style="font-size:11px;color:${baixo?"var(--red)":"var(--txt-faint)"}">saldo atual: ${saldo}${baixo?" — abaixo do mínimo":""}</div></div>
-      <input type="number" min="0" step="1" id="min_${p.id}" value="${min||""}" placeholder="0" style="width:90px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-family:var(--mono);text-align:right">
-    </div>`;
-  }).join("");
+  // estado de expansão local ao modal
+  const _exp={};
+  function _buildRows(){
+    return prods.map(p=>{
+      const saldo=atual(p.id),min=getMin(p.id);
+      const tams=(p.tamanhos||[]).filter(Boolean);
+      const baixo=min>0&&saldo<=min;
+      const expanded=!!_exp[p.id];
+      // linha do produto (total)
+      let html=`<div style="border-bottom:1px solid var(--line-soft)">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;cursor:${tams.length?"pointer":"default"}" onclick="${tams.length?`_minToggle('${p.id}')`:""}>
+          <span style="width:18px;text-align:center;color:var(--blue);font-weight:700;font-size:13px;flex:0 0 auto">${tams.length?(expanded?"▾":"▸"):""}</span>
+          <div style="flex:1;font-size:13.5px;font-weight:500">${esc(p.descricao)}<div style="font-size:11px;color:${baixo?"var(--red)":"var(--txt-faint)"}">saldo total: ${saldo}${baixo?" — abaixo do mínimo":""}</div></div>
+          <div style="text-align:right;font-size:11px;color:var(--txt-faint);margin-right:4px">mínimo total</div>
+          <input type="number" min="0" step="1" id="min_${p.id}" value="${min||""}" placeholder="0"
+            onclick="event.stopPropagation()"
+            style="width:80px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-family:var(--mono);text-align:right">
+        </div>`;
+      // linhas por tamanho (se expandido)
+      if(expanded && tams.length){
+        tams.forEach(t=>{
+          const tid=p.id+"__"+t.replace(/\s+/g,"_");
+          const saldoTam=MOVS.filter(m=>m.produtoId===p.id&&m.tamanho===t).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);
+          const minTam=getMin(tid);
+          const baixoTam=minTam>0&&saldoTam<=minTam;
+          html+=`<div style="display:flex;align-items:center;gap:10px;padding:7px 4px 7px 36px;background:var(--bg-soft,#f9fafb);border-top:1px solid var(--line-soft)">
+            <div style="flex:1;font-size:12.5px;color:var(--txt-dim)">↳ ${esc(t)}<div style="font-size:11px;color:${baixoTam?"var(--red)":"var(--txt-faint)"}">saldo: ${saldoTam}${baixoTam?" — abaixo do mínimo":""}</div></div>
+            <div style="text-align:right;font-size:11px;color:var(--txt-faint);margin-right:4px">mínimo</div>
+            <input type="number" min="0" step="1" id="min_${p.id}__${t.replace(/\s+/g,"_")}" value="${minTam||""}" placeholder="0"
+              style="width:80px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-family:var(--mono);text-align:right">
+          </div>`;
+        });
+      }
+      html+="</div>";
+      return html;
+    }).join("");
+  }
+  window._minToggle=function(pid){
+    _exp[pid]=!_exp[pid];
+    const el=document.getElementById("min-rows-body");
+    if(el) el.innerHTML=_buildRows();
+  };
   openModal("Configurar Estoque Mínimo · "+(dom==="safety"?"Safety":"Insumos"),
-    `<div style="font-size:12.5px;color:var(--txt-dim);margin-bottom:10px">Defina a quantidade mínima de cada item. Quando o saldo atingir ou ficar abaixo desse valor, o item entra na lista de alertas. Deixe em branco ou 0 para não monitorar.</div>
-     <div style="max-height:50vh;overflow:auto">${rows}</div>`,
+    `<div style="font-size:12.5px;color:var(--txt-dim);margin-bottom:10px">Defina a quantidade mínima de cada item. Clique no <b>▸</b> para definir mínimos por tamanho individualmente. Deixe em branco ou 0 para não monitorar.</div>
+     <div id="min-rows-body" style="max-height:54vh;overflow:auto">${_buildRows()}</div>`,
     [{label:"Cancelar",cls:"ghost",act:closeModal},
      {label:"Salvar mínimos",cls:"primary",act:function(){
-        prods.forEach(p=>{const el=document.getElementById("min_"+p.id);if(el)setMin(p.id,el.value);});
+        prods.forEach(p=>{
+          const el=document.getElementById("min_"+p.id);
+          if(el) setMin(p.id,el.value);
+          // salvar por tamanho também
+          (p.tamanhos||[]).filter(Boolean).forEach(t=>{
+            const tid=p.id+"__"+t.replace(/\s+/g,"_");
+            const elt=document.getElementById("min_"+tid);
+            if(elt) setMin(tid,elt.value);
+          });
+        });
         closeModal();toast("Estoques mínimos salvos.","ok");render();
      }}]);
 }
@@ -2246,30 +2322,26 @@ function formProduto(prod){
          if(isNew)state.sel=obj.id;closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
        }}]);
   }else{
-    // Insumos: com setor
-    const setores=Object.keys(SETORES[dom]);
-    const cur=prod||{setor:setores[0],descricao:"",unidade:SETORES[dom][setores[0]].un,tamanhos:[...SETORES[dom][setores[0]].tamanhos],cores:[...SETORES[dom][setores[0]].cores]};
+    // Insumos: nome livre digitado pelo usuário
+    const cur=prod||{setor:"",descricao:"",unidade:"UN",tamanhos:[],cores:[]};
     openModal((isNew?"Cadastrar":"Alterar")+" Produto · Insumos",`
       <div class="mgrid">
-        <div class="mfield"><label>Produto <span class="req">*</span></label><select id="p_setor">${setores.map(s=>`<option ${cur.setor===s?"selected":""}>${s}</option>`).join("")}</select></div>
-        <div class="mfield"><label>Unidade</label><input id="p_un" value="${esc(cur.unidade)}"></div>
-        <div class="mfield full"><label>Descrição</label><input id="p_desc" value="${esc(cur.descricao)}" placeholder="Nome do produto (opcional)"></div>
-        <div class="mfield full"><label>Tamanhos (separe por vírgula)</label><input id="p_tam" value="${esc((cur.tamanhos||[]).join(", "))}" placeholder="Ex: A4, A3"></div>
-        <div class="mfield full"><label>Cores (separe por vírgula)</label><input id="p_cor" value="${esc((cur.cores||[]).join(", "))}" placeholder="Ex: Branco, Azul"></div>
+        <div class="mfield full"><label>Nome do Produto <span class="req">*</span></label><input id="p_setor" value="${esc(cur.setor||cur.descricao)}" placeholder="Ex: Resma A4, Fita crepe, Papel sulfite..."></div>
+        <div class="mfield"><label>Unidade</label><input id="p_un" value="${esc(cur.unidade||"UN")}" placeholder="UN, CX, PC..."></div>
+        <div class="mfield full"><label>Tamanhos (separe por vírgula)</label><input id="p_tam" value="${esc((cur.tamanhos||[]).join(", "))}" placeholder="Ex: A4, A3 (opcional)"></div>
+        <div class="mfield full"><label>Cores (separe por vírgula)</label><input id="p_cor" value="${esc((cur.cores||[]).join(", "))}" placeholder="Ex: Branco, Azul (opcional)"></div>
       </div>`,
       [{label:"Cancelar",cls:"ghost",act:closeModal},
        {label:"Salvar",cls:"primary",act:async()=>{
-         const setor=val("p_setor");
-         const desc=val("p_desc").trim()||setor; // usa o produto como descrição se vazio
-         const obj={dom,setor,classificacao:setor,descricao:desc,unidade:val("p_un").trim()||"UN",codRef:"",
+         const nome=val("p_setor").trim();
+         if(!nome){toast("Informe o nome do produto","erro");return;}
+         const obj={dom,setor:nome,classificacao:nome,descricao:nome,unidade:val("p_un").trim()||"UN",codRef:"",
            tamanhos:val("p_tam").split(",").map(s=>s.trim()).filter(Boolean),
            cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
          if(isNew){obj.id=uid();PRODUTOS.push(obj);state.sel=obj.id;}else Object.assign(prod,obj);
          const saved=await persistProd(isNew?obj:prod,isNew);if(!saved)return;
          closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
        }}]);
-    setTimeout(()=>{const ss=document.getElementById("p_setor");if(ss)ss.onchange=()=>{const c=SETORES[dom][ss.value];
-      document.getElementById("p_un").value=c.un;document.getElementById("p_tam").value=c.tamanhos.join(", ");document.getElementById("p_cor").value=c.cores.join(", ");};},0);
   }
 }
 async function delProduto(){
