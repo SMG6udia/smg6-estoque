@@ -278,7 +278,7 @@ const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","
 const MESES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const ALERTA_DIAS=15;
 /* ── Google Sheets / Apps Script ── */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz8SW4IpDchJBJ1S8EEmcyTWhs-TtUPicm-a7VqC1TJ8TD2fpGEHZ3iwRCU9sdZ01gj-g/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwTxP0Xs_-PjXtmwG22sKLHimrD7T9R5kK7ol5mPfy4W8xMzfidlwTY3Ja0bVNBGX7D7g/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
 const DRIVE_FOLDER_EPI = "1xIq3muw068guiHAPAEe17NA_pyjUTpPg";
 let   DRIVE_STATUS = "idle";
 
@@ -294,10 +294,9 @@ function api(action, payload, silent) {
     const cbName = "__smg6cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
 
     // Timeout de 20 segundos
-    var isReadAction = action && (action.indexOf("get") === 0 || action === "getAll");
     const timeout = setTimeout(function() {
       cleanup();
-      if (!silent && !isReadAction) driveSetStatus("error");
+      if (!silent) driveSetStatus("error");
       resolve({ ok: false, error: "Tempo esgotado. Verifique a conexão e a URL do Apps Script." });
     }, 20000);
 
@@ -309,14 +308,9 @@ function api(action, payload, silent) {
     }
 
     // Registrar callback global que o Apps Script vai chamar
-    // Ações de leitura (get*) nunca pintam de vermelho — só mostram ok/error em escrita
     window[cbName] = function(data) {
       cleanup();
-      if (!silent) {
-        if(data && data.ok){ driveSetStatus("ok"); }
-        else if(!isReadAction){ driveSetStatus("error"); }
-        // leitura com erro: mantém estado atual sem pintar vermelho
-      }
+      if (!silent) driveSetStatus(data && data.ok ? "ok" : "error");
       resolve(data || { ok: false, error: "Resposta vazia do servidor." });
     };
 
@@ -331,7 +325,7 @@ function api(action, payload, silent) {
     script.src = url;
     script.onerror = function() {
       cleanup();
-      if (!silent && !isReadAction) driveSetStatus("error");
+      if (!silent) driveSetStatus("error");
       resolve({ ok: false, error: "Erro ao conectar. Verifique se a implantação está ativa e acessível." });
     };
     document.head.appendChild(script);
@@ -586,16 +580,6 @@ function driveSetStatus(s){
   var map={idle:["#8b94a3","Sheets"],syncing:["#f0a500","Salvando…"],ok:["#1f9d55","Sheets ✓"],error:["#d23b30","Sheets ✗"]};
   var m=map[s]||map.idle;
   dot.style.background=m[0];lbl.textContent=m[1];
-  // Após "ok", volta para idle em 3s para não travar o indicador
-  if(s==="ok"){
-    clearTimeout(window._driveOkTimer);
-    window._driveOkTimer=setTimeout(function(){driveSetStatus("idle");},3000);
-  }
-  // Após "error", volta para idle em 8s para não ficar vermelho para sempre
-  if(s==="error"){
-    clearTimeout(window._driveErrTimer);
-    window._driveErrTimer=setTimeout(function(){driveSetStatus("idle");},8000);
-  }
 }
 async function backupManual(){toast("Os dados são salvos automaticamente no Sheets.","ok");}
 
@@ -694,7 +678,7 @@ function doLogout(){
 
 /* Recarrega todos os dados do sistema (Sheets) sem encerrar a sessão */
 async function atualizarDados(){
-  if(!getToken()){toast("Sessão expirada. Faça login novamente.","erro");doLogout();return;}
+  if(!getToken()){doLogout();return;} // token ausente: vai para login sem mensagem dupla
   var btn=document.getElementById("btnAtualizar");
   var txtOrig=btn?btn.textContent:"";
   if(btn){btn.disabled=true;btn.textContent="↻ Atualizando…";}
@@ -789,8 +773,8 @@ function _uForm(u){
     +'<input id="uf_nome" value="'+(u?esc(u.nome||""):"")+'"></div>'
     +'<div class="mfield full"><label>E-mail @mercadolivre.com <span class="req">*</span></label>'
     +'<input id="uf_email" type="email" value="'+(u?esc(u.email):"")+'"></div>'
-    +'<div class="mfield"><label>Contato / Celular</label>'
-    +'<input id="uf_contato" value="'+(u?esc(u.contato||""):"")+'" placeholder="(xx) XXXXX-XXXX" maxlength="16" oninput="maskCelular(this)"></div>'
+    +'<div class="mfield"><label>Contato / Telefone</label>'
+    +'<input id="uf_contato" value="'+(u?esc(u.contato||""):"")+'"></div>'
     +'<div class="mfield"><label>Usuário (login)</label><input id="uf_usuario" value="'+(u?esc(u.usuario||"")+"":"")+'" placeholder="Ex: joao.silva"></div>'
     +'<div class="mfield"><label>Nível de Acesso <span class="req">*</span></label>'
     +'<select id="uf_nivel">'+niveis.map(function(n){return'<option value="'+n+'"'+(u&&u.nivel===n?" selected":"")+'>'+n+'</option>';}).join("")+'</select></div>'
@@ -844,32 +828,11 @@ async function _uExcluir(email){
 
 function _uHistorico(){
   if(!isAdmin()){toast("Acesso restrito","erro");return;}
-  var anoAtual=new Date().getFullYear();
-  var anosOpts='<option value="">Todos os anos</option>'+[anoAtual,anoAtual-1,anoAtual-2].map(a=>`<option value="${a}">${a}</option>`).join("");
-  var mesesOpts='<option value="">Todos os meses</option>'+["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join("");
-  var filtroHtml=`<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line-soft)">
-    <div class="fg"><label>Ano</label><select id="hist_ano">${anosOpts}</select></div>
-    <div class="fg"><label>Mês</label><select id="hist_mes">${mesesOpts}</select></div>
-    <button class="btn primary sm" onclick="_uHistoricoFiltrar()">Filtrar</button>
-  </div>`;
-  var body=filtroHtml+'<div id="hist-list"><div class="loading">Carregando…</div></div>';
+  var body='<div id="hist-list"><div class="loading">Carregando…</div></div>';
   openModal("Histórico de Acesso",body,[{label:"Fechar",cls:"ghost",act:closeModal}]);
   api("getHistoricoAcesso",null,true).then(function(r){
-    window._histData=r;
-    // Começar sem filtro de período para mostrar todos os registros
-    _uHistoricoRender(r,"","");
-  });
-}
-
-function _uHistoricoFiltrar(){
-  var ano=(document.getElementById("hist_ano")||{}).value||"";
-  var mes=(document.getElementById("hist_mes")||{}).value||"";
-  _uHistoricoRender(window._histData,ano,mes);
-}
-
-function _uHistoricoRender(r,ano,mes){
     var el=document.getElementById("hist-list");if(!el)return;
-    if(!r||!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r?r.error:"sem dados")+'</div>';return;}
+    if(!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r.error)+'</div>';return;}
     if(!r.data||!r.data.length){el.innerHTML='<div class="empty">Nenhum registro.</div>';return;}
     var acaoLabel={
       'login':'🔑 Login',
@@ -885,21 +848,7 @@ function _uHistoricoRender(r,ano,mes){
       'saveDesligado':'⚠ Colaborador Desligado',
       'getAll':'📂 Acesso ao Sistema'
     };
-    var dados=r.data.filter(function(h){
-      if(!h.ts)return true;
-      // ts pode vir como "dd/mm/yyyy, hh:mm:ss" (pt-BR) ou "yyyy-mm-dd..."
-      // Extrair ano e mês de forma robusta
-      var tsAno="", tsMes="";
-      var mBr=h.ts.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-      var mIso=h.ts.match(/^(\d{4})-(\d{2})/);
-      if(mBr){ tsAno=mBr[3]; tsMes=mBr[2]; }
-      else if(mIso){ tsAno=mIso[1]; tsMes=mIso[2]; }
-      else { tsAno=h.ts.slice(0,4); tsMes=h.ts.slice(5,7); }
-      if(ano && tsAno !== ano) return false;
-      if(mes && tsMes !== mes) return false;
-      return true;
-    });
-    var rows=dados.slice(0,500).map(function(h){
+    var rows=r.data.slice(0,300).map(function(h){
       var lbl=acaoLabel[h.acao]||h.acao||'—';
       var chipCol=h.acao==='login'?'sai':h.acao.includes('delete')||h.acao.includes('Exclu')?'desl':'tam';
       return '<tr>'
@@ -907,11 +856,11 @@ function _uHistoricoRender(r,ano,mes){
         +'<td><b>'+esc(h.nome||h.email)+'</b><br><span style="font-size:10px;color:var(--txt-faint)">'+esc(h.email)+'</span></td>'
         +'<td><span class="chip '+chipCol+'">'+lbl+'</span></td>'
         +'<td style="font-size:12px;color:var(--txt-dim)">'+esc(h.detalhes||"")+'</td></tr>';
-    }).join("")||'<tr><td colspan="4"><div class="empty">Nenhum registro para o período selecionado.</div></td></tr>';
-    el.innerHTML='<div style="font-size:11px;color:var(--txt-faint);margin-bottom:8px">'+dados.length+' registro(s) encontrado(s)</div>'
-      +'<div style="max-height:400px;overflow:auto"><table style="font-size:12.5px">'
+    }).join("")||'<tr><td colspan="4"><div class="empty">Nenhum registro ainda.</div></td></tr>';
+    el.innerHTML='<div style="max-height:460px;overflow:auto"><table style="font-size:12.5px">'
       +'<thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>';
+  });
 }
 
 function _uTrocaSenha(){
@@ -1022,10 +971,7 @@ function viewEstoque(){
 
   let detRows,totals;
   if(sel){
-    const filtroTipo=state.estoqueFiltraTipo||"todos";
-    let ms=movOf(sel.id).slice().sort((a,b)=>b.data>a.data?1:(b.data<a.data?-1:((b._t||0)-(a._t||0))));
-    if(filtroTipo==="entrada")ms=ms.filter(m=>m.tipo==="entrada");
-    else if(filtroTipo==="saida")ms=ms.filter(m=>m.tipo==="saida");
+    const ms=movOf(sel.id).slice().sort((a,b)=>b.data>a.data?1:(b.data<a.data?-1:((b._t||0)-(a._t||0))));
     detRows=ms.length?ms.map(mv=>`<tr>
       <td class="num">${fmtD(mv.data)}</td>
       <td>${mv.tipo==="entrada"?`<span class="chip ent">Entrada</span>`:`<span class="chip sai">Saída</span>`}</td>
@@ -1048,35 +994,17 @@ function viewEstoque(){
       <div class="tot"><span class="l">Custo Total do Estoque</span><span class="v blue">${brl(at*cu)}</span></div>
       <div class="tot"><span class="l">Custo Atual da Unidade</span><span class="v">${brl(cu)}</span></div></div>`;
   }else{
-    // Mostrar todos itens com saldo + expandir tamanhos
-    if(!state.estoqueExpand) state.estoqueExpand={};
+    // Mostrar todos itens com saldo
     const todosProd=prods.map(p=>({p,saldo:atual(p.id)}));
     const resumoRows=todosProd.map(({p,saldo})=>{
       const cu=custoUnit(p.id);
-      const tams=(p.tamanhos||[]).filter(Boolean);
-      const expanded=!!state.estoqueExpand[p.id];
-      // linha do tamanho: saldo por tamanho
-      let tamRows="";
-      if(expanded && tams.length){
-        tamRows=tams.map(t=>{
-          const sTam=MOVS.filter(m=>m.produtoId===p.id&&m.tamanho===t).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);
-          return `<tr style="background:var(--bg-soft,#f9fafb)">
-            <td style="padding-left:28px;color:var(--txt-dim);font-size:12px">↳ ${esc(t)}</td>
-            <td></td>
-            <td class="num ${sTam<=0?'qneg':'qpos'}" style="font-size:12px">${sTam}</td>
-            <td class="num" style="font-size:12px">${brl(cu)}</td>
-            <td class="num" style="font-size:12px">${brl(sTam*cu)}</td>
-          </tr>`;
-        }).join("");
-      }
-      const hasTams=tams.length>0;
-      return `<tr style="cursor:${hasTams?"pointer":"default"}" onclick="${hasTams?`toggleEstoqueExpand('${p.id}')`:""}"}>
-        <td><span style="display:inline-block;width:18px;text-align:center;color:var(--blue);font-weight:700;font-size:13px">${hasTams?(expanded?"▾":"▸"):""}</span> <b>${esc(p.descricao)}</b></td>
+      return `<tr>
+        <td><b>${esc(p.descricao)}</b></td>
         <td>${esc(p.setor||"")}</td>
         <td class="num ${saldo<=0?'qneg':'qpos'}">${saldo}</td>
         <td class="num">${brl(cu)}</td>
         <td class="num">${brl(saldo*cu)}</td>
-      </tr>${tamRows}`;
+      </tr>`;
     }).join("") || `<tr><td colspan="5"><div class="empty">Nenhum produto cadastrado.</div></td></tr>`;
     detRows=resumoRows;
     const totRetirado=MOVS.filter(m=>m.dom===dom&&m.tipo==="saida").reduce((s,m)=>s+m.qtd,0);
@@ -1092,7 +1020,7 @@ function viewEstoque(){
 
   const tableHeader=sel
     ?`<thead><tr><th>Data</th><th>Tipo</th><th>${dom==="safety"?"Colaborador / Fornecedor":"Destino / Fornecedor"}</th><th>Tamanho</th><th>Cor</th><th class="num">Qtde.</th><th class="num">Custo</th><th>Observações</th><th></th></tr></thead>`
-    :`<thead><tr><th>Produto</th><th>Categoria</th><th class="num">Saldo</th><th class="num">Custo Unit.</th><th class="num">Valor Total</th></tr></thead>`;
+    :`<thead><tr><th>Produto</th><th>Tipo/Modelo</th><th class="num">Saldo</th><th class="num">Custo Unit.</th><th class="num">Valor Total</th></tr></thead>`;
 
   // Toolbar de produto: só no contexto do produto selecionado (lista suspensa de Safety/Insumos)
   const prodToolbar=`
@@ -1111,12 +1039,6 @@ function viewEstoque(){
   <div class="selbar">
     <div class="fg grow"><label>Produto · ${dom==="safety"?"Safety":"Insumos"}</label>
       <select id="prodSel">${prodOpts}</select></div>
-    ${hasSel?`<div class="fg"><label>Filtrar por Tipo</label>
-      <div class="seg" id="estoqueFilSeg">
-        <button data-ft="todos" class="${(state.estoqueFiltraTipo||"todos")==="todos"?"active":""}">Todos</button>
-        <button data-ft="entrada" class="${state.estoqueFiltraTipo==="entrada"?"active":""}">Entradas</button>
-        <button data-ft="saida" class="${state.estoqueFiltraTipo==="saida"?"active":""}">Saídas</button>
-      </div></div>`:""}
   </div>
   <div class="toolbar">
     <button class="tbtn tb-green" data-act="entrada" ${hasSel?"":"disabled"}><span class="ic">↓</span> Entrada no Estoque <span class="k">F5</span></button>
@@ -1129,13 +1051,7 @@ function viewEstoque(){
   ${totals}`;
 }
 
-function toggleEstoqueExpand(pid){
-  if(!state.estoqueExpand) state.estoqueExpand={};
-  state.estoqueExpand[pid]=!state.estoqueExpand[pid];
-  render();
-}
-
-/* ================= COLABORADORES =================  */
+/* ================= COLABORADORES ================= */
 function viewColabList(){
   const dom=state.dom;
   const btn=dom==="safety"?`<button class="btn primary sm" data-act="novaEntrega">＋ Nova Entrega de EPI</button>`:"";
@@ -1253,13 +1169,10 @@ function viewDesligados(){
     <td><b>${esc(n)}</b></td>
     <td><span class="chip desl">Desligado</span></td>
     <td class="num">${MOVS.filter(m=>m.tipo==="saida"&&m.parte===n).length}</td>
-    <td style="display:flex;gap:6px">
-      <button class="btn ghost sm" onclick="state.histColab='${esc(n)}';render()">📋 Histórico</button>
-      <button class="btn danger sm" onclick="excluirDesligado('${esc(n)}')">🗑 Excluir</button>
-    </td>
+    <td><button class="btn ghost sm" onclick="state.histColab='${esc(n)}';render()">📋 Histórico</button></td>
   </tr>`).join("") || `<tr><td colspan="4"><div class="empty">Nenhum desligado registrado.</div></td></tr>`;
   return `<div class="panel">
-    <div class="panel-bar"><h3>Colaboradores Desligados</h3><div class="right"><button class="btn danger sm" onclick="excluirTodosDesligados()">🗑 Limpar Todos</button></div></div>
+    <div class="panel-bar"><h3>Colaboradores Desligados</h3></div>
     <div class="scroll-y"><table>
       <thead><tr><th>Nome</th><th>Status</th><th class="num">Registros</th><th>Ação</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -1267,50 +1180,15 @@ function viewDesligados(){
   </div>`;
 }
 
-/* ── Excluir desligado ── */
-async function excluirDesligado(nome){
-  const ok=await confirmModal("Excluir Desligado",`Excluir <b>${esc(nome)}</b> da lista de desligados? Os registros de movimentação não serão apagados.`,"Excluir");
-  if(!ok)return;
-  // Remove dos dois arrays (dinâmico do Sheets + hardcoded)
-  DESLIGADOS=DESLIGADOS.filter(n=>n!==nome);
-  const idx=COLAB_PLANILHA_DESLIGADOS.indexOf(nome);
-  if(idx>=0) COLAB_PLANILHA_DESLIGADOS.splice(idx,1);
-  render(); // atualiza tela imediatamente
-  // Persiste no Sheets em background (silent=true para não pintar de vermelho)
-  const r=await api("deleteDesligado",{nome},true);
-  if(r&&r.ok){
-    toast("Colaborador excluído da lista.","ok");
-  }else{
-    toast("Removido localmente. Para excluir da planilha, publique o novo Apps Script.","warn");
-  }
-}
-async function excluirTodosDesligados(){
-  const todos=[...new Set([...COLAB_PLANILHA_DESLIGADOS,...DESLIGADOS])];
-  if(!todos.length){toast("Nenhum desligado para excluir.","warn");return;}
-  const ok=await confirmModal("Limpar Todos os Desligados",`Isso removerá <b>${todos.length}</b> colaborador(es) da lista de desligados. Os registros de movimentação não serão apagados. Deseja continuar?`,"Limpar Todos");
-  if(!ok)return;
-  // Limpa os dois arrays
-  DESLIGADOS=[];
-  COLAB_PLANILHA_DESLIGADOS.length=0;
-  render(); // atualiza tela imediatamente
-  // Persiste no Sheets em background (silent=true para não pintar de vermelho)
-  const r=await api("deleteAllDesligados",{},true);
-  if(r&&r.ok){
-    toast("Lista de desligados limpa.","ok");
-  }else{
-    toast("Removido localmente. Para excluir da planilha, publique o novo Apps Script.","warn");
-  }
-}
-
-
+/* ── Cadastro de Colaboradores ── */
 function formCadastroColab(colab){
   var isNew=!colab;
   var c=colab||{};
   var body='<div class="mgrid">'
     +'<div class="mfield full"><label>Nome Completo <span class="req">*</span></label>'
     +'<input id="cc_nome" value="'+(c.nome||"")+'"></div>'
-    +'<div class="mfield"><label>Contato / Celular</label>'
-    +'<input id="cc_contato" value="'+(c.contato||"")+'" placeholder="(xx) XXXXX-XXXX" maxlength="16" oninput="maskCelular(this)"></div>'
+    +'<div class="mfield"><label>Contato / Telefone</label>'
+    +'<input id="cc_contato" value="'+(c.contato||"")+'"></div>'
     +'<div class="mfield"><label>CPF <span class="req">*</span></label>'
     +'<input id="cc_cpf" type="text" inputmode="numeric" maxlength="14" value="'+(c.cpf||"")+'" placeholder="000.000.000-00"></div>'
     +'<div class="mfield"><label>Status</label>'
@@ -1723,63 +1601,20 @@ function configurarMinimos(){
   const dom=state.dom;
   const prods=prodOf(dom).slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
   if(!prods.length){toast("Cadastre produtos antes de definir mínimos.","warn");return;}
-  // estado de expansão local ao modal
-  const _exp={};
-  function _buildRows(){
-    return prods.map(p=>{
-      const saldo=atual(p.id),min=getMin(p.id);
-      const tams=(p.tamanhos||[]).filter(Boolean);
-      const baixo=min>0&&saldo<=min;
-      const expanded=!!_exp[p.id];
-      // linha do produto (total)
-      let html=`<div style="border-bottom:1px solid var(--line-soft)">
-        <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;cursor:${tams.length?"pointer":"default"}" onclick="${tams.length?`_minToggle('${p.id}')`:""}>
-          <span style="width:18px;text-align:center;color:var(--blue);font-weight:700;font-size:13px;flex:0 0 auto">${tams.length?(expanded?"▾":"▸"):""}</span>
-          <div style="flex:1;font-size:13.5px;font-weight:500">${esc(p.descricao)}<div style="font-size:11px;color:${baixo?"var(--red)":"var(--txt-faint)"}">saldo total: ${saldo}${baixo?" — abaixo do mínimo":""}</div></div>
-          <div style="text-align:right;font-size:11px;color:var(--txt-faint);margin-right:4px">mínimo total</div>
-          <input type="number" min="0" step="1" id="min_${p.id}" value="${min||""}" placeholder="0"
-            onclick="event.stopPropagation()"
-            style="width:80px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-family:var(--mono);text-align:right">
-        </div>`;
-      // linhas por tamanho (se expandido)
-      if(expanded && tams.length){
-        tams.forEach(t=>{
-          const tid=p.id+"__"+t.replace(/\s+/g,"_");
-          const saldoTam=MOVS.filter(m=>m.produtoId===p.id&&m.tamanho===t).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);
-          const minTam=getMin(tid);
-          const baixoTam=minTam>0&&saldoTam<=minTam;
-          html+=`<div style="display:flex;align-items:center;gap:10px;padding:7px 4px 7px 36px;background:var(--bg-soft,#f9fafb);border-top:1px solid var(--line-soft)">
-            <div style="flex:1;font-size:12.5px;color:var(--txt-dim)">↳ ${esc(t)}<div style="font-size:11px;color:${baixoTam?"var(--red)":"var(--txt-faint)"}">saldo: ${saldoTam}${baixoTam?" — abaixo do mínimo":""}</div></div>
-            <div style="text-align:right;font-size:11px;color:var(--txt-faint);margin-right:4px">mínimo</div>
-            <input type="number" min="0" step="1" id="min_${p.id}__${t.replace(/\s+/g,"_")}" value="${minTam||""}" placeholder="0"
-              style="width:80px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-family:var(--mono);text-align:right">
-          </div>`;
-        });
-      }
-      html+="</div>";
-      return html;
-    }).join("");
-  }
-  window._minToggle=function(pid){
-    _exp[pid]=!_exp[pid];
-    const el=document.getElementById("min-rows-body");
-    if(el) el.innerHTML=_buildRows();
-  };
+  const rows=prods.map(p=>{
+    const saldo=atual(p.id),min=getMin(p.id);
+    const baixo=min>0&&saldo<=min;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line-soft)">
+      <div style="flex:1;font-size:13.5px;font-weight:500">${esc(p.descricao)}<div style="font-size:11px;color:${baixo?"var(--red)":"var(--txt-faint)"}">saldo atual: ${saldo}${baixo?" — abaixo do mínimo":""}</div></div>
+      <input type="number" min="0" step="1" id="min_${p.id}" value="${min||""}" placeholder="0" style="width:90px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-family:var(--mono);text-align:right">
+    </div>`;
+  }).join("");
   openModal("Configurar Estoque Mínimo · "+(dom==="safety"?"Safety":"Insumos"),
-    `<div style="font-size:12.5px;color:var(--txt-dim);margin-bottom:10px">Defina a quantidade mínima de cada item. Clique no <b>▸</b> para definir mínimos por tamanho individualmente. Deixe em branco ou 0 para não monitorar.</div>
-     <div id="min-rows-body" style="max-height:54vh;overflow:auto">${_buildRows()}</div>`,
+    `<div style="font-size:12.5px;color:var(--txt-dim);margin-bottom:10px">Defina a quantidade mínima de cada item. Quando o saldo atingir ou ficar abaixo desse valor, o item entra na lista de alertas. Deixe em branco ou 0 para não monitorar.</div>
+     <div style="max-height:50vh;overflow:auto">${rows}</div>`,
     [{label:"Cancelar",cls:"ghost",act:closeModal},
      {label:"Salvar mínimos",cls:"primary",act:function(){
-        prods.forEach(p=>{
-          const el=document.getElementById("min_"+p.id);
-          if(el) setMin(p.id,el.value);
-          // salvar por tamanho também
-          (p.tamanhos||[]).filter(Boolean).forEach(t=>{
-            const tid=p.id+"__"+t.replace(/\s+/g,"_");
-            const elt=document.getElementById("min_"+tid);
-            if(elt) setMin(tid,elt.value);
-          });
-        });
+        prods.forEach(p=>{const el=document.getElementById("min_"+p.id);if(el)setMin(p.id,el.value);});
         closeModal();toast("Estoques mínimos salvos.","ok");render();
      }}]);
 }
@@ -2011,24 +1846,8 @@ function abrirRelatorioVisual(){
   const maxBar=Math.max(1,...itens.map(i=>Math.max(i.ent,i.sai)));
   const periodoLbl=document.querySelector(".stat .l")?document.querySelector(".stat .l").textContent:"Período";
 
-  // Montar linhas com detalhamento por tamanho
   const itemRows=itens.map(i=>{
     const eW=Math.round(i.ent/maxBar*100),sW=Math.round(i.sai/maxBar*100);
-    // Buscar produto para verificar tamanhos
-    const prod=PRODUTOS.find(p=>p.descricao===i.nome&&p.dom===dom);
-    const temTamanhos=prod&&prod.tamanhos&&prod.tamanhos.length>0;
-    let tamRows="";
-    if(temTamanhos){
-      prod.tamanhos.forEach(tam=>{
-        const entsTam=ent.filter(m=>m.produtoId===prod.id&&m.tamanho===tam).reduce((s,m)=>s+m.qtd,0);
-        const saisTam=sai.filter(m=>m.produtoId===prod.id&&m.tamanho===tam).reduce((s,m)=>s+m.qtd,0);
-        const iniTam=MOVS.filter(m=>m.produtoId===prod.id&&m.tamanho===tam&&m.data<start).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);
-        const fimTam=iniTam+entsTam-saisTam;
-        if(entsTam||saisTam||fimTam){
-          tamRows+=`<tr style="background:#f9fafb"><td style="padding-left:24px;color:#5b6675;font-size:11.5px">↳ <b>${esc(tam)}</b></td><td class="n ini" style="font-size:11.5px">${iniTam}</td><td class="n ent" style="font-size:11.5px">+${entsTam}</td><td class="n sai" style="font-size:11.5px">−${saisTam}</td><td class="n fim" style="font-size:11.5px;${fimTam<=0?"color:#d23b30":""}">${fimTam}</td><td></td></tr>`;
-        }
-      });
-    }
     return `<tr>
       <td class="nm">${esc(i.nome)}${i.ca?`<span class="ca">CA ${esc(i.ca)}</span>`:""}</td>
       <td class="n ini">${i.ini}</td>
@@ -2039,7 +1858,7 @@ function abrirRelatorioVisual(){
         <div class="b"><span class="be" style="width:${i.ent?Math.max(eW,4):0}%"></span></div>
         <div class="b"><span class="bs" style="width:${i.sai?Math.max(sW,4):0}%"></span></div>
       </td>
-    </tr>${tamRows}`;
+    </tr>`;
   }).join("")||`<tr><td colspan="6" style="text-align:center;padding:30px;color:#888">Sem dados no período.</td></tr>`;
 
   const topColab=Object.entries(porColab).sort((a,b)=>b[1]-a[1]).slice(0,15);
@@ -2112,24 +1931,6 @@ function abrirRelatorioVisual(){
     </table>
     ${dom==="safety"?`<h2>Colaboradores que mais retiraram</h2>
     <table><thead><tr><th style="width:50px">#</th><th>Colaborador</th><th class="n">Itens retirados</th></tr></thead><tbody>${colabRows}</tbody></table>`:""}
-    <h2>&#128196; Movimentações do Período</h2>
-    <table>
-      <thead><tr><th>Data</th><th>Tipo</th><th>Produto / EPI</th><th>${dom==="safety"?"Colaborador":"Destino / Fornecedor"}</th><th>Tamanho</th><th class="n">Qtd</th><th>Liberado por / Usuário</th><th>Observações</th></tr></thead>
-      <tbody>${[...ent,...sai].sort((a,b)=>b.data>a.data?1:(b.data<a.data?-1:0)).map(m=>{
-        const pr=PRODUTOS.find(x=>x.id===m.produtoId);
-        return `<tr style="${m.tipo==='entrada'?'background:#f5fdf8':''}">
-          <td style="white-space:nowrap;font-size:11.5px">${fmtD(m.data)}</td>
-          <td><span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:10.5px;font-weight:700;${m.tipo==='entrada'?'background:#e3f5ea;color:#1f9d55':'background:#e8e9f5;color:#2D3277'}">${m.tipo==='entrada'?'Entrada':'Saída'}</span></td>
-          <td style="font-weight:600">${esc(pr?pr.descricao:m.produtoId)}</td>
-          <td>${esc(m.parte||'—')}</td>
-          <td>${m.tamanho?`<span style="background:#f1f4f8;padding:1px 6px;border-radius:8px;font-size:11px">${esc(m.tamanho)}</span>`:'—'}</td>
-          <td class="n" style="${m.tipo==='entrada'?'color:#1f9d55':'color:#d23b30'};font-weight:700">${m.tipo==='entrada'?'+':'−'}${m.qtd}</td>
-          <td style="font-size:11.5px">${esc(m.liberadoPor||m.usuario||'—')}</td>
-          <td style="font-size:11px;color:#5b6675">${esc(m.obs||'')}</td>
-        </tr>`;
-      }).join('')||`<tr><td colspan="8" style="text-align:center;padding:20px;color:#888">Nenhuma movimentação no período.</td></tr>`}
-      </tbody>
-    </table>
     <div class="noprint">
       <button class="btn" onclick="window.print()">&#128424; Imprimir / Salvar PDF</button>
       <button class="btn sec" onclick="window.close()">Fechar</button>
@@ -2247,10 +2048,9 @@ function exportCSV(){
 function wire(){
   document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>act(b.dataset.act));
   if(state.view==="estoque"){
-    const ps=document.getElementById("prodSel");if(ps)ps.onchange=()=>{state.sel=ps.value||null;state.estoqueFiltraTipo="todos";render();};
+    const ps=document.getElementById("prodSel");if(ps)ps.onchange=()=>{state.sel=ps.value||null;render();};
     document.querySelectorAll("[data-delmov]").forEach(b=>b.onclick=()=>delMov(b.dataset.delmov));
     document.querySelectorAll("[data-editmov]").forEach(b=>b.onclick=()=>editMov(b.dataset.editmov));
-    document.querySelectorAll("#estoqueFilSeg button").forEach(b=>b.onclick=()=>{state.estoqueFiltraTipo=b.dataset.ft;render();});
   }
   if(state.view==="colaboradores"){
     const cb=document.getElementById("colabBusca");
@@ -2319,29 +2119,44 @@ function formProduto(prod){
            cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
          if(isNew){obj.id=uid();PRODUTOS.push(obj);}else Object.assign(prod,obj);
          const saved=await persistProd(isNew?obj:prod,isNew);if(!saved)return;
-         if(isNew)state.sel=obj.id;closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
+         if(isNew){
+           // Sincroniza com o servidor para garantir que MOVS e PRODUTOS estejam consistentes
+           // antes de qualquer lançamento de entrada (evita saldo zerado na entrega de EPI)
+           await loadAll();
+           state.sel=obj.id;
+         }
+         closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
        }}]);
   }else{
-    // Insumos: nome livre digitado pelo usuário
-    const cur=prod||{setor:"",descricao:"",unidade:"UN",tamanhos:[],cores:[]};
+    // Insumos: com setor
+    const setores=Object.keys(SETORES[dom]);
+    const cur=prod||{setor:setores[0],descricao:"",unidade:SETORES[dom][setores[0]].un,tamanhos:[...SETORES[dom][setores[0]].tamanhos],cores:[...SETORES[dom][setores[0]].cores]};
     openModal((isNew?"Cadastrar":"Alterar")+" Produto · Insumos",`
       <div class="mgrid">
-        <div class="mfield full"><label>Nome do Produto <span class="req">*</span></label><input id="p_setor" value="${esc(cur.setor||cur.descricao)}" placeholder="Ex: Resma A4, Fita crepe, Papel sulfite..."></div>
-        <div class="mfield"><label>Unidade</label><input id="p_un" value="${esc(cur.unidade||"UN")}" placeholder="UN, CX, PC..."></div>
-        <div class="mfield full"><label>Tamanhos (separe por vírgula)</label><input id="p_tam" value="${esc((cur.tamanhos||[]).join(", "))}" placeholder="Ex: A4, A3 (opcional)"></div>
-        <div class="mfield full"><label>Cores (separe por vírgula)</label><input id="p_cor" value="${esc((cur.cores||[]).join(", "))}" placeholder="Ex: Branco, Azul (opcional)"></div>
+        <div class="mfield"><label>Tipo/Modelo <span class="req">*</span></label><select id="p_setor">${setores.map(s=>`<option ${cur.setor===s?"selected":""}>${s}</option>`).join("")}</select></div>
+        <div class="mfield"><label>Unidade</label><input id="p_un" value="${esc(cur.unidade)}"></div>
+        <div class="mfield full"><label>Descrição <span class="req">*</span></label><input id="p_desc" value="${esc(cur.descricao)}" placeholder="Nome do produto"></div>
+        <div class="mfield full"><label>Tamanhos (separe por vírgula)</label><input id="p_tam" value="${esc((cur.tamanhos||[]).join(", "))}" placeholder="Ex: A4, A3"></div>
+        <div class="mfield full"><label>Cores (separe por vírgula)</label><input id="p_cor" value="${esc((cur.cores||[]).join(", "))}" placeholder="Ex: Branco, Azul"></div>
       </div>`,
       [{label:"Cancelar",cls:"ghost",act:closeModal},
        {label:"Salvar",cls:"primary",act:async()=>{
-         const nome=val("p_setor").trim();
-         if(!nome){toast("Informe o nome do produto","erro");return;}
-         const obj={dom,setor:nome,classificacao:nome,descricao:nome,unidade:val("p_un").trim()||"UN",codRef:"",
+         const desc=val("p_desc").trim();if(!desc){toast("Informe a descrição","erro");return;}
+         const setor=val("p_setor");
+         const obj={dom,setor,classificacao:setor,descricao:desc,unidade:val("p_un").trim()||"UN",codRef:"",
            tamanhos:val("p_tam").split(",").map(s=>s.trim()).filter(Boolean),
            cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
-         if(isNew){obj.id=uid();PRODUTOS.push(obj);state.sel=obj.id;}else Object.assign(prod,obj);
-         const saved=await persistProd(isNew?obj:prod,isNew);if(!saved)return;
+         if(isNew){obj.id=uid();PRODUTOS.push(obj);}else Object.assign(prod,obj);
+         const savedIns=await persistProd(isNew?obj:prod,isNew);if(!savedIns)return;
+         if(isNew){
+           // Sincroniza com o servidor para garantir que MOVS e PRODUTOS estejam consistentes
+           await loadAll();
+           state.sel=obj.id;
+         }
          closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
        }}]);
+    setTimeout(()=>{const ss=document.getElementById("p_setor");if(ss)ss.onchange=()=>{const c=SETORES[dom][ss.value];
+      document.getElementById("p_un").value=c.un;document.getElementById("p_tam").value=c.tamanhos.join(", ");document.getElementById("p_cor").value=c.cores.join(", ");};},0);
   }
 }
 async function delProduto(){
@@ -2416,8 +2231,12 @@ async function submitMov(tipo){
       obsEnt=("C.A. "+caVal)+(obsEnt?(" — "+obsEnt):"");
     }
     var novaEnt={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"entrada",data,qtd,tamanho:tam,cor,parte:parte||"—",custoUnit:Number(val("m_cu"))||0,usuario:val("m_user").trim(),obs:obsEnt,ca:caVal};
-    const r_e=await persistMov(novaEnt);if(!r_e)return;
-    MOVS.push(novaEnt);
+    const r_e=await persistMov(novaEnt);
+    if(!r_e){
+      // persistMov já exibe o toast de erro; não adiciona ao MOVS local para evitar saldo inconsistente
+      return;
+    }
+    MOVS.push(novaEnt); // só adiciona ao array local após confirmação do servidor
     // Memoriza o último C.A. no produto para pré-preencher próximas entradas
     if(caVal){p.ca=caVal;}
     closeModal();toast(`Entrada: ${qtd}× ${p.descricao}`+(caVal?` (C.A. ${caVal})`:""),"ok");render();
@@ -2438,15 +2257,7 @@ function formEntrega(prefColab){
   if(!prods.length){toast("Cadastre produtos de Safety primeiro","erro");return;}
   EPI_WZ.step=1;EPI_WZ.dados={};EPI_WZ.fotoDataUrl=null;EPI_WZ.assinDataUrl=null;EPI_WZ.pinOk=false;
   if(EPI_WZ.stream){EPI_WZ.stream.getTracks().forEach(t=>t.stop());EPI_WZ.stream=null;}
-  // Carregar usuários se o cache estiver vazio
-  if(!Object.keys(_uCache||{}).length){
-    api("getUsuarios",null).then(function(r){
-      if(r.ok&&r.data){r.data.forEach(function(u){_uCache[u.email]=u;});}
-      _wz_step1(prods,prefColab);
-    });
-  }else{
-    _wz_step1(prods,prefColab);
-  }
+  _wz_step1(prods,prefColab);
 }
 
 /* ── helper: barra de progresso wizard ── */
@@ -2476,22 +2287,11 @@ function _wz_step1(prods,prefColab){
   for(var j=0;j<prods.length;j++){
     prodOpts+='<option value="'+prods[j].id+'">'+esc(prods[j].descricao)+'</option>';
   }
-  var libOpts='<option value="">— selecione —</option>';
-  // Tentar usar lista de usuários do sistema se disponível
-  var usuariosSis=Object.values(_uCache||{}).filter(function(u){return u&&u.ativo!==false;});
-  if(usuariosSis.length){
-    usuariosSis.sort(function(a,b){return (a.nome||"").localeCompare(b.nome||"","pt-BR");}).forEach(function(u){
-      libOpts+='<option value="'+esc(u.nome||u.email)+'">'+esc(u.nome||u.email)+'</option>';
-    });
-  }
-  var libField=usuariosSis.length
-    ?'<div class="mfield"><label>Liberado por <span class="req">*</span></label><select id="ew_lib">'+libOpts+'</select></div>'
-    :'<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="ew_lib" placeholder="Respons&aacute;vel pela entrega"></div>';
   var body=_wz_steps(1)
     +'<div id="movAlert"></div>'
     +'<div class="mgrid">'
     +'<div class="mfield"><label>Data <span class="req">*</span></label><input type="date" id="ew_data" value="'+today()+'"></div>'
-    +libField
+    +'<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="ew_lib" placeholder="Respons&aacute;vel pela entrega"></div>'
     +'<div class="mfield full"><label>Colaborador (recebe) <span class="req">*</span></label><select id="ew_colab">'+colabOpts+'</select></div>'
     +'<div class="mfield full"><label>EPI / Produto <span class="req">*</span></label><select id="ew_prod">'+prodOpts+'</select></div>'
     +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
@@ -3029,14 +2829,13 @@ async function driveSyncSheet(mov,produto){
   }catch(e){}
 }
 
-/* ── Máscara de celular (xx) XXXXX-XXXX ── */
-function maskCelular(el){
-  var v=el.value.replace(/\D/g,'').slice(0,11);
-  if(v.length>10)      el.value='('+v.slice(0,2)+') '+v.slice(2,7)+'-'+v.slice(7);
-  else if(v.length>6)  el.value='('+v.slice(0,2)+') '+v.slice(2,6)+'-'+v.slice(6);
-  else if(v.length>2)  el.value='('+v.slice(0,2)+') '+v.slice(2);
-  else if(v.length>0)  el.value='('+v;
-  else el.value=v;
+async function backupManual(){toast("Dados salvos automaticamente no Google Sheets.","ok");}
+function driveSetStatus(s){
+  DRIVE_STATUS=s;
+  var dot=document.getElementById("drive-dot"),lbl=document.getElementById("drive-lbl");
+  if(!dot||!lbl)return;
+  var map={idle:["#8b94a3","Sheets"],syncing:["#f0a500","Salvando…"],ok:["#1f9d55","Sheets ✓"],error:["#d23b30","Sheets ✗"]};
+  var m=map[s]||map.idle;dot.style.background=m[0];lbl.textContent=m[1];
 }
 
 
