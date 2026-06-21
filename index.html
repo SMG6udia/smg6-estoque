@@ -2315,16 +2315,20 @@ function _wz_step1(prods,prefColab){
       ts.innerHTML='<option value="">&#8212;</option>';
       if(pr&&pr.tamanhos&&pr.tamanhos.length){
         pr.tamanhos.forEach(function(t){ts.innerHTML+='<option>'+esc(t)+'</option>';});
+        // Seleciona automaticamente o primeiro tamanho para mostrar o saldo imediatamente
+        if(pr.tamanhos.length>0) ts.value=pr.tamanhos[0];
       }
       upd();
     }
     function upd(){
       var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
       if(!pr){disp.value="\u2014";chk();return;}
-      // Se o produto tem tamanhos, mostra o saldo do TAMANHO selecionado (não o total)
+      // Se o produto tem tamanhos, mostra o saldo do tamanho selecionado
       if(pr.tamanhos&&pr.tamanhos.length){
         var tamSel=ts?ts.value:"";
-        disp.value=tamSel?saldoVar(pr.id,tamSel,""):"\u2014";
+        // Se nenhum tamanho selecionado ainda, mostra o saldo total do produto
+        var saldoMostrado=tamSel?saldoVar(pr.id,tamSel,""):atual(pr.id);
+        disp.value=saldoMostrado;
       }else{
         disp.value=atual(pr.id);
       }
@@ -2352,6 +2356,9 @@ function _wz_step1(prods,prefColab){
     if(ts)ts.onchange=upd;
     if(cp)cp.onchange=chk;
     if(da)da.onchange=chk;
+    // Inicializa o saldo logo ao abrir o modal, caso o produto já venha pré-selecionado
+    if(ps&&ps.value) fill();
+    else upd(); // garante que disp mostre "—" se nenhum produto selecionado
   },0);
 }
 
