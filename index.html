@@ -201,7 +201,6 @@
       </span>
       <span id="clock"></span>
       <span id="save" style="font-size:11px;opacity:.85">—</span>
-      <button onclick="atualizarDados()" id="btnAtualizar" title="Recarregar os dados do sistema sem sair" style="background:var(--blue);border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--body)">↻ Atualizar</button>
       <button onclick="doLogout()" style="background:var(--blue);border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--body)">Sair</button>
     </div>
   </header>
@@ -473,21 +472,6 @@ const movOf=pid=>MOVS.filter(m=>m.produtoId===pid);
 function selProd(){return PRODUTOS.find(p=>p.id===state.sel)||null;}
 function atual(pid){return movOf(pid).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
 function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>(m.tamanho||"")===(tam||"")&&(m.cor||"")===(cor||"")).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
-/* Estoque atual de um produto separado por tamanho. Itens de tamanho único retornam 1 linha. */
-function estoquePorTamanho(pid){
-  var p=PRODUTOS.find(function(x){return x.id===pid;});
-  if(!p)return [];
-  var temTam=p.tamanhos&&p.tamanhos.length>0;
-  var map={},ordem=[];
-  function add(t){if(!(t in map)){map[t]=0;ordem.push(t);}}
-  if(temTam){p.tamanhos.forEach(function(t){add(t);});}else{add("Único");}
-  movOf(pid).forEach(function(m){
-    var t=temTam?(m.tamanho||"(sem tam.)"):"Único";
-    add(t);
-    map[t]+=(m.tipo==="entrada"?m.qtd:-m.qtd);
-  });
-  return ordem.map(function(t){return {tamanho:t,saldo:map[t]};});
-}
 function custoUnit(pid){const e=movOf(pid).filter(m=>m.tipo==="entrada"&&m.custoUnit>0);return e.length?e[e.length-1].custoUnit:0;}
 function caAtualProduto(pid){
   if(!pid)return"";
@@ -600,7 +584,7 @@ function showLogin(){
     var el=document.getElementById(id);
     if(el && !el._hasEnter){
       el._hasEnter=true;
-      el.addEventListener("keydown",function(e){if(e.key==="Enter"||e.keyCode===13){e.preventDefault();doLogin();}});
+      el.addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
     }
   });
 }
@@ -674,27 +658,6 @@ function doLogout(){
   var sn=document.getElementById("li_senha");if(sn)sn.value="";
   var er=document.getElementById("li_err");if(er)er.textContent="";
   showLogin();
-}
-
-/* Recarrega todos os dados do sistema (Sheets) sem encerrar a sessão */
-async function atualizarDados(){
-  // Não força logout ao atualizar — apenas avisa se não há token local
-  if(!getToken()){toast("Faça login para continuar.","erro");doLogout();return;}
-  var btn=document.getElementById("btnAtualizar");
-  var txtOrig=btn?btn.textContent:"";
-  if(btn){btn.disabled=true;btn.textContent="↻ Atualizando…";}
-  try{
-    const ok=await loadAll();
-    try{await loadPins();}catch(e){}
-    if(ok){
-      render();
-      toast("Dados atualizados.","ok");
-    }
-  }catch(e){
-    toast("Erro ao atualizar: "+(e.message||"verifique a conexão"),"erro");
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent=txtOrig||"↻ Atualizar";}
-  }
 }
 
 /* ── Gestão de Usuários (Admin) ── */
@@ -815,14 +778,14 @@ async function _uReset(email){
 }
 
 async function _uExcluir(email){
-  var u=_uCache[email]||null;
-  var nome=u&&u.nome?u.nome:email;
+  var u=_uCache[email];
+  var nome=u?esc(u.nome||u.email):esc(email);
   var ok=await confirmModal("Excluir Usuário",
-    "Excluir definitivamente o usuário <b>"+esc(nome)+"</b> (<b>"+esc(email)+"</b>)?<br>Esta ação não pode ser desfeita.",
+    "Excluir permanentemente o usuário <b>"+nome+"</b>? Esta ação não pode ser desfeita.",
     "Excluir");
   if(!ok)return;
-  var r=await api("deleteUsuario",{email:email});
-  if(!r.ok){toast("Erro: "+(r.error||"não foi possível excluir"),"erro");return;}
+  var r=await api("deleteUsuario",{email});
+  if(!r.ok){toast("Erro: "+r.error,"erro");return;}
   toast("Usuário excluído.","ok");
   viewUsuariosPanel();
 }
@@ -999,6 +962,20 @@ function viewEstoque(){
     const todosProd=prods.map(p=>({p,saldo:atual(p.id)}));
     const resumoRows=todosProd.map(({p,saldo})=>{
       const cu=custoUnit(p.id);
+      // Se produto tem tamanhos definidos, exibir uma linha por tamanho
+      if(p.tamanhos&&p.tamanhos.length>0){
+        const tamRows=p.tamanhos.map(t=>{
+          const sT=saldoVar(p.id,t,"");
+          return `<tr>
+            <td><b>${esc(p.descricao)}</b> <span class="chip tam">${esc(t)}</span></td>
+            <td>${esc(p.setor||"")}</td>
+            <td class="num ${sT<=0?'qneg':'qpos'}">${sT}</td>
+            <td class="num">${brl(cu)}</td>
+            <td class="num">${brl(sT*cu)}</td>
+          </tr>`;
+        }).join("");
+        return tamRows;
+      }
       return `<tr>
         <td><b>${esc(p.descricao)}</b></td>
         <td>${esc(p.setor||"")}</td>
@@ -1008,15 +985,8 @@ function viewEstoque(){
       </tr>`;
     }).join("") || `<tr><td colspan="5"><div class="empty">Nenhum produto cadastrado.</div></td></tr>`;
     detRows=resumoRows;
-    const totRetirado=MOVS.filter(m=>m.dom===dom&&m.tipo==="saida").reduce((s,m)=>s+m.qtd,0);
-    const totEntrada=MOVS.filter(m=>m.dom===dom&&m.tipo==="entrada").reduce((s,m)=>s+m.qtd,0);
-    // Em Safety, não exibir o resumo inferior (Total de Produtos, Entradas, Retirado, Itens e Valor em Estoque)
-    totals=dom==="safety"?"":`<div class="totals">
-      <div class="tot"><span class="l">Total de Produtos</span><span class="v">${prods.length}</span></div>
-      <div class="tot"><span class="l">Total Entradas</span><span class="v green">+${totEntrada}</span></div>
-      <div class="tot"><span class="l">Total Retirado</span><span class="v red">−${totRetirado}</span></div>
-      <div class="tot"><span class="l">Itens em Estoque</span><span class="v green">${todosProd.reduce((s,x)=>s+(x.saldo>0?x.saldo:0),0)}</span></div>
-      <div class="tot"><span class="l">Valor Total em Estoque</span><span class="v blue">${brl(todosProd.reduce((s,{p,saldo})=>s+saldo*custoUnit(p.id),0))}</span></div></div>`;
+    // Totais gerais removidos da view de estoque (solicitado pelo usuário)
+    totals="";
   }
 
   const tableHeader=sel
@@ -1459,35 +1429,30 @@ function viewRel(){
     ${comprasNec.length?`<div class="scroll-y" style="max-height:380px">${compraRows}</div>`:`<div class="empty">Nenhuma compra prevista. Estoque suficiente para o horizonte de 30 dias.</div>`}
   </div>`;
 
-  // ----- RELATÓRIO DE ESTOQUE POR TAMANHO -----
-  // Para cada item, mostra a quantidade atual em estoque de cada tamanho.
-  // Itens de tamanho único aparecem com uma única linha.
-  let itensTam=prodOf(dom).slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
-  if(state.repItem)itensTam=itensTam.filter(p=>p.id===state.repItem);
-  if(busca)itensTam=itensTam.filter(p=>p.descricao.toLowerCase().includes(busca));
-  const tamRows=itensTam.map(p=>{
-    const linhas=estoquePorTamanho(p.id);
-    const totalItem=linhas.reduce((s,l)=>s+l.saldo,0);
-    const chips=linhas.map(l=>{
-      const cor=l.saldo<=0?"var(--red)":"var(--blue)";
-      const bg=l.saldo<=0?"var(--red-bg)":"#eef0fb";
-      return `<span style="display:inline-flex;align-items:center;gap:6px;background:${bg};border-radius:7px;padding:4px 10px;font-size:12.5px">
-        <b>${esc(l.tamanho)}</b><span style="font-family:var(--mono);font-weight:700;color:${cor}">${l.saldo}</span></span>`;
+  // ----- ESTOQUE ATUAL POR TAMANHO -----
+  const tamRows=prodOf(dom).filter(p=>p.tamanhos&&p.tamanhos.length>0).map(p=>{
+    const tamCols=p.tamanhos.map(t=>{
+      const st=saldoVar(p.id,t,"");
+      return `<span style="display:inline-flex;flex-direction:column;align-items:center;min-width:48px;margin:3px">
+        <span style="font-family:var(--mono);font-weight:700;font-size:15px;color:${st<=0?"var(--red)":"var(--blue)"}">${st}</span>
+        <span class="chip tam" style="margin-top:3px">${esc(t)}</span>
+      </span>`;
     }).join("");
+    const totProd=atual(p.id);
     return `<div class="itembar">
       <div class="top">
-        <div class="nm">${esc(p.descricao)}${(p.tamanhos&&p.tamanhos.length)?"":'<span style="font-size:11px;color:var(--txt-faint);margin-left:6px">tamanho único</span>'}</div>
-        <div class="sd" style="color:${totalItem<=0?"var(--red)":"var(--blue)"}">${totalItem}<small> total</small></div>
+        <div class="nm">${esc(p.descricao)}${dom==="safety"&&caAtualProduto(p.id)?`<span class="ca">CA ${esc(caAtualProduto(p.id))}</span>`:""}</div>
+        <div class="sd" style="color:${totProd<=0?"var(--red)":"var(--blue)"}">${totProd}<small> total</small></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0 2px">${chips}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0">${tamCols}</div>
     </div>`;
-  }).join("") || `<div class="empty">Nenhum item para exibir.${busca||state.repItem?" Ajuste o filtro.":""}</div>`;
-  const tamanhoBlock=`<div class="panel" style="grid-column:1 / -1">
-    <div class="panel-bar"><h3>&#128207; Estoque por Tamanho</h3>
-      <div class="right" style="font-size:12px;color:var(--txt-faint)">Quantidade atual em estoque de cada tamanho por item</div>
-    </div>
-    <div class="scroll-y" style="max-height:480px">${tamRows}</div>
-  </div>`;
+  }).join("") || `<div class="empty">Nenhum produto com tamanhos cadastrados.</div>`;
+  const estoqueTagRows=prodOf(dom).some(p=>p.tamanhos&&p.tamanhos.length>0)
+    ? `<div class="panel" style="grid-column:1 / -1">
+        <div class="panel-bar"><h3>📦 Estoque Atual por Tamanho</h3></div>
+        <div class="scroll-y" style="max-height:500px">${tamRows}</div>
+      </div>`
+    : "";
 
   return `
   <div class="selbar">
@@ -1510,7 +1475,6 @@ function viewRel(){
   </div>
   ${alertBlock}
   ${compraBlock}
-  ${tamanhoBlock}
   <div class="rep-grid" style="margin-top:12px">
     ${evoBlock}
     ${motivoBlock}
@@ -1520,6 +1484,7 @@ function viewRel(){
       </div>
       <div class="scroll-y" style="max-height:520px">${barRows}</div>
     </div>
+    ${estoqueTagRows}
     <div class="panel">
       <div class="panel-bar"><h3>Balanço do Período</h3></div>
       ${colChart}
@@ -1621,7 +1586,7 @@ function configurarMinimos(){
 }
 
 /* ===== ANÁLISES: motivos, top itens, previsão de demanda ===== */
-const MOTIVO_CORES={"Primeiro Item":"#2D3277","Novo Colaborador":"#2D3277","Dano":"#d23b30","Perda":"#b8860b","Desgaste":"#1f9d55","Outro":"#7a7f8c"};
+const MOTIVO_CORES={"Primeiro Item":"#2D3277","Dano":"#d23b30","Perda":"#b8860b","Desgaste":"#1f9d55","Outro":"#7a7f8c"};
 /* Extrai o motivo de uma movimentação (campo direto ou parse de obs) */
 function motivoDe(m){
   if(m.motivo)return m.motivo;
@@ -2176,14 +2141,7 @@ function formMov(tipo){
   openModal((isSai?"Saída":"Entrada")+" · "+esc(p.descricao),body,
     [{label:"Cancelar",cls:"ghost",act:closeModal},{label:isSai?"Registrar Saída":"Registrar Entrada",cls:isSai?"primary":"green",act:()=>submitMov(tipo)}]);
   setTimeout(()=>{
-    const upd=()=>{if(isSai){const d=document.getElementById("m_disp");if(d){
-        const tamSel=(p.tamanhos&&p.tamanhos.length)?val("m_tam"):"";
-        const corSel=(p.cores&&p.cores.length)?val("m_cor"):"";
-        // Mostra o saldo do tamanho/cor selecionado, não o total
-        d.value=((p.tamanhos&&p.tamanhos.length)||(p.cores&&p.cores.length))
-          ?((p.tamanhos&&p.tamanhos.length&&!tamSel)?"\u2014":saldoVar(p.id,tamSel,corSel))
-          :atual(p.id);
-      }}chk();};
+    const upd=()=>{if(isSai){const d=document.getElementById("m_disp");if(d)d.value=atual(p.id);}chk();};
     ["m_tam","m_cor"].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=upd;});
     if(isSai){const pe=document.getElementById("m_parte"),da=document.getElementById("m_data");if(pe)pe.onchange=chk;if(da)da.onchange=chk;}
     upd();
@@ -2203,9 +2161,7 @@ async function submitMov(tipo){
   if(p.cores&&p.cores.length&&!cor){toast("Selecione a cor/tipo","erro");return;}
   if(isSai){
     const lib=val("m_lib").trim();if(!parte||!lib){toast("Colaborador e liberado por obrigatórios","erro");return;}
-    const usaVar=(p.tamanhos&&p.tamanhos.length)||(p.cores&&p.cores.length);
-    const saldo=usaVar?saldoVar(p.id,tam,cor):atual(p.id);
-    if(qtd>saldo){toast(`Estoque insuficiente. Disponível${usaVar?` para ${[tam,cor].filter(Boolean).join(" / ")}`:""}: ${saldo}.`,"erro");return;}
+    const saldo=atual(p.id);if(qtd>saldo){toast(`Estoque insuficiente. Disponível: ${saldo}.`,"erro");return;}
     const prev=MOVS.filter(m=>m.tipo==="saida"&&m.produtoId===p.id&&m.parte.trim().toLowerCase()===parte.toLowerCase()&&m.data<=data).sort((a,b)=>b.data>a.data?1:-1)[0];
     if(prev){const d=days(prev.data,data);if(d>=0&&d<ALERTA_DIAS){const ok=await confirmModal("Retirada em intervalo curto",`<b>${esc(parte)}</b> retirou <b>${esc(p.descricao)}</b> em <b>${fmtD(prev.data)}</b> (há ${d} dia${d===1?"":"s"}). Registrar mesmo assim?`,"Registrar");if(!ok)return;}}
     var novaMov={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"saida",data,qtd,tamanho:tam,cor,parte,liberadoPor:lib,obs:val("m_obs").trim()};
@@ -2300,16 +2256,16 @@ function _wz_step1(prods,prefColab){
       ts.innerHTML='<option value="">&#8212;</option>';
       if(pr&&pr.tamanhos&&pr.tamanhos.length){
         pr.tamanhos.forEach(function(t){ts.innerHTML+='<option>'+esc(t)+'</option>';});
-        // Seleciona o primeiro tamanho automaticamente para mostrar o saldo imediatamente
+        // Pré-seleciona o primeiro tamanho para exibir o saldo imediatamente
         if(pr.tamanhos.length>0) ts.value=pr.tamanhos[0];
       }
       upd();
     }
     function upd(){
       var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
-      if(!pr){disp.value="\u2014";chk();return;}
-      // Se o produto tem tamanhos, mostra o saldo do tamanho selecionado
-      // Se nenhum tamanho foi selecionado ainda, mostra o saldo total do produto
+      if(!pr){disp.value="—";chk();return;}
+      // Se produto tem tamanhos, mostra saldo do tamanho selecionado
+      // Se nenhum tamanho selecionado, mostra o saldo total do produto
       if(pr.tamanhos&&pr.tamanhos.length){
         var tamSel=ts?ts.value:"";
         disp.value=tamSel?saldoVar(pr.id,tamSel,""):atual(pr.id);
@@ -2340,6 +2296,8 @@ function _wz_step1(prods,prefColab){
     if(ts)ts.onchange=upd;
     if(cp)cp.onchange=chk;
     if(da)da.onchange=chk;
+    // Inicializa saldo se produto já vier pré-selecionado ao abrir o modal
+    if(ps&&ps.value) fill(); else upd();
   },0);
 }
 
@@ -2357,8 +2315,8 @@ function _wz_validarDados(){
   if(!colab||!prod||!qtd||qtd<=0||!lib||!data){toast("Preencha todos os campos obrigat\u00f3rios","erro");return;}
   if(!motivo){toast("Selecione o motivo da troca","erro");return;}
   if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
-  var saldo=(p&&p.tamanhos&&p.tamanhos.length)?saldoVar(prod,tam,""):atual(prod);
-  if(qtd>saldo){toast("Estoque insuficiente. Dispon\u00edvel"+((p&&p.tamanhos&&p.tamanhos.length)?(" no tamanho "+tam):"")+": "+saldo+".","erro");return;}
+  var saldo=atual(prod);
+  if(qtd>saldo){toast("Estoque insuficiente. Dispon\u00edvel: "+saldo+".","erro");return;}
   EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs,motivo:motivo};
   _wz_step2();
 }
@@ -2827,18 +2785,17 @@ function driveSetStatus(s){
 }
 
 
-/* ── Auto-login silencioso ─────────────────────────────────────────────────────────
-   Quando o celular/notebook recarrega a página (fundo de tela, troca de aba, refresh),
-   o app volta para a tela de login por padrão. Se já há um token salvo no localStorage,
-   tenta restaurar a sessão automaticamente sem que o usuário precise digitar senha.
-   Se o token expirou no servidor (getAll retorna erro), aí sim exibe a tela de login. */
+/* ── Auto-restore de sessão ────────────────────────────────────────────────────────
+   Ao abrir/recarregar a página (celular, notebook, refresh), se já há token
+   no localStorage, tenta restaurar a sessão sem exibir a tela de login.
+   Se o servidor rejeitar o token (expirado), remove a sessão e pede login. */
 (function autoRestore(){
   var token = localStorage.getItem("smg6_token");
   var userJson = localStorage.getItem("smg6_user");
   if(!token || !userJson) return; // sem sessão prévia — fica na tela de login
   var user;
   try { user = JSON.parse(userJson); } catch(e){ return; }
-  // Mostra o app imediatamente (UX: evita flash da tela de login)
+  // Mostra o app imediatamente (evita flash da tela de login)
   var ls = document.getElementById("login-screen");
   var appEl = document.getElementById("app");
   if(ls) ls.style.display = "none";
@@ -2847,30 +2804,38 @@ function driveSetStatus(s){
   if(saveEl) saveEl.textContent = user.nome || user.email || "";
   // Inicializa estado básico
   state.view = "estoque"; state.sel = null; state.colab = null;
-  state.rep = "semana";
+  state.rep = state.rep || "semana";
   var yr = Number((today()||"2026").slice(0,4));
-  state.repYear = yr;
-  state.repWeek = weekOfYear(today());
-  state.repMonth = today().slice(0,7);
-  state.repStart = today().slice(0,8)+"01";
-  state.repEnd = today();
-  // Tenta carregar dados — se o token expirou, getAll retorna erro e vai para login
+  if(!state.repYear) state.repYear = yr;
+  if(!state.repWeek) state.repWeek = weekOfYear(today());
+  if(!state.repMonth) state.repMonth = today().slice(0,7);
+  if(!state.repStart) state.repStart = today().slice(0,8)+"01";
+  if(!state.repEnd) state.repEnd = today();
+  // Atualiza relógio
+  if(typeof startClock==="function") startClock();
+  // Carrega dados do servidor
   (async function(){
-    var ok = await loadAll();
-    if(!ok){
-      // Servidor rejeitou o token: pede login novamente
-      localStorage.removeItem("smg6_token");
-      localStorage.removeItem("smg6_user");
-      if(appEl) appEl.style.display = "none";
-      if(ls) ls.style.display = "flex";
-      showLogin();
-      return;
+    try{
+      var ok = await loadAll();
+      if(!ok){
+        // Servidor rejeitou token — pede login novamente
+        localStorage.removeItem("smg6_token");
+        localStorage.removeItem("smg6_user");
+        if(appEl) appEl.style.display = "none";
+        if(ls) ls.style.display = "flex";
+        if(typeof showLogin==="function") showLogin();
+        return;
+      }
+      try{ await loadPins(); }catch(e){}
+      render();
+      // Exibir/ocultar menu admin
+      var menuAdmin = document.getElementById("menuUsuarios");
+      if(menuAdmin) menuAdmin.style.display = (user.nivel==="admin") ? "" : "none";
+    }catch(err){
+      // Erro de rede: mantém o app visível com os dados em cache (se houver)
+      console.warn("autoRestore: erro ao carregar dados", err);
+      render();
     }
-    try{ await loadPins(); }catch(e){}
-    render();
-    // Menu de admin
-    var menuAdmin = document.getElementById("menuUsuarios");
-    if(menuAdmin) menuAdmin.style.display = (user.nivel==="admin")?"":"none";
   })();
 })();
 
@@ -2903,20 +2868,6 @@ function driveSetStatus(s){
         render();
       });
     }
-    /* Login com tecla Enter — vincula já no carregamento da página
-       (a tela de login aparece por padrão, antes de qualquer logout). */
-    ["li_email","li_senha"].forEach(function(id){
-      var el=document.getElementById(id);
-      if(el && !el._hasEnter){
-        el._hasEnter=true;
-        el.addEventListener("keydown",function(e){
-          if(e.key==="Enter"||e.keyCode===13){e.preventDefault();doLogin();}
-        });
-      }
-    });
-    var liEmail=document.getElementById("li_email");
-    var ls=document.getElementById("login-screen");
-    if(liEmail && ls && ls.style.display!=="none"){try{liEmail.focus();}catch(e){}}
   }
   if(document.readyState==="loading"){
     document.addEventListener("DOMContentLoaded",bind);
