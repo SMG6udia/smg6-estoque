@@ -678,7 +678,8 @@ function doLogout(){
 
 /* Recarrega todos os dados do sistema (Sheets) sem encerrar a sessão */
 async function atualizarDados(){
-  if(!getToken()){doLogout();return;} // token ausente: vai para login sem mensagem dupla
+  // Não força logout ao atualizar — apenas avisa se não há token local
+  if(!getToken()){toast("Faça login para continuar.","erro");doLogout();return;}
   var btn=document.getElementById("btnAtualizar");
   var txtOrig=btn?btn.textContent:"";
   if(btn){btn.disabled=true;btn.textContent="↻ Atualizando…";}
@@ -2119,13 +2120,7 @@ function formProduto(prod){
            cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
          if(isNew){obj.id=uid();PRODUTOS.push(obj);}else Object.assign(prod,obj);
          const saved=await persistProd(isNew?obj:prod,isNew);if(!saved)return;
-         if(isNew){
-           // Sincroniza com o servidor para garantir que MOVS e PRODUTOS estejam consistentes
-           // antes de qualquer lançamento de entrada (evita saldo zerado na entrega de EPI)
-           await loadAll();
-           state.sel=obj.id;
-         }
-         closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
+         if(isNew)state.sel=obj.id;closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
        }}]);
   }else{
     // Insumos: com setor
@@ -2146,14 +2141,8 @@ function formProduto(prod){
          const obj={dom,setor,classificacao:setor,descricao:desc,unidade:val("p_un").trim()||"UN",codRef:"",
            tamanhos:val("p_tam").split(",").map(s=>s.trim()).filter(Boolean),
            cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
-         if(isNew){obj.id=uid();PRODUTOS.push(obj);}else Object.assign(prod,obj);
-         const savedIns=await persistProd(isNew?obj:prod,isNew);if(!savedIns)return;
-         if(isNew){
-           // Sincroniza com o servidor para garantir que MOVS e PRODUTOS estejam consistentes
-           await loadAll();
-           state.sel=obj.id;
-         }
-         closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
+         if(isNew){obj.id=uid();PRODUTOS.push(obj);state.sel=obj.id;}else Object.assign(prod,obj);
+         await persistProd();closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
        }}]);
     setTimeout(()=>{const ss=document.getElementById("p_setor");if(ss)ss.onchange=()=>{const c=SETORES[dom][ss.value];
       document.getElementById("p_un").value=c.un;document.getElementById("p_tam").value=c.tamanhos.join(", ");document.getElementById("p_cor").value=c.cores.join(", ");};},0);
@@ -2231,12 +2220,8 @@ async function submitMov(tipo){
       obsEnt=("C.A. "+caVal)+(obsEnt?(" — "+obsEnt):"");
     }
     var novaEnt={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"entrada",data,qtd,tamanho:tam,cor,parte:parte||"—",custoUnit:Number(val("m_cu"))||0,usuario:val("m_user").trim(),obs:obsEnt,ca:caVal};
-    const r_e=await persistMov(novaEnt);
-    if(!r_e){
-      // persistMov já exibe o toast de erro; não adiciona ao MOVS local para evitar saldo inconsistente
-      return;
-    }
-    MOVS.push(novaEnt); // só adiciona ao array local após confirmação do servidor
+    const r_e=await persistMov(novaEnt);if(!r_e)return;
+    MOVS.push(novaEnt);
     // Memoriza o último C.A. no produto para pré-preencher próximas entradas
     if(caVal){p.ca=caVal;}
     closeModal();toast(`Entrada: ${qtd}× ${p.descricao}`+(caVal?` (C.A. ${caVal})`:""),"ok");render();
@@ -2315,7 +2300,7 @@ function _wz_step1(prods,prefColab){
       ts.innerHTML='<option value="">&#8212;</option>';
       if(pr&&pr.tamanhos&&pr.tamanhos.length){
         pr.tamanhos.forEach(function(t){ts.innerHTML+='<option>'+esc(t)+'</option>';});
-        // Seleciona automaticamente o primeiro tamanho para mostrar o saldo imediatamente
+        // Seleciona o primeiro tamanho automaticamente para mostrar o saldo imediatamente
         if(pr.tamanhos.length>0) ts.value=pr.tamanhos[0];
       }
       upd();
@@ -2324,11 +2309,10 @@ function _wz_step1(prods,prefColab){
       var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
       if(!pr){disp.value="\u2014";chk();return;}
       // Se o produto tem tamanhos, mostra o saldo do tamanho selecionado
+      // Se nenhum tamanho foi selecionado ainda, mostra o saldo total do produto
       if(pr.tamanhos&&pr.tamanhos.length){
         var tamSel=ts?ts.value:"";
-        // Se nenhum tamanho selecionado ainda, mostra o saldo total do produto
-        var saldoMostrado=tamSel?saldoVar(pr.id,tamSel,""):atual(pr.id);
-        disp.value=saldoMostrado;
+        disp.value=tamSel?saldoVar(pr.id,tamSel,""):atual(pr.id);
       }else{
         disp.value=atual(pr.id);
       }
@@ -2356,9 +2340,6 @@ function _wz_step1(prods,prefColab){
     if(ts)ts.onchange=upd;
     if(cp)cp.onchange=chk;
     if(da)da.onchange=chk;
-    // Inicializa o saldo logo ao abrir o modal, caso o produto já venha pré-selecionado
-    if(ps&&ps.value) fill();
-    else upd(); // garante que disp mostre "—" se nenhum produto selecionado
   },0);
 }
 
@@ -2845,6 +2826,53 @@ function driveSetStatus(s){
   var m=map[s]||map.idle;dot.style.background=m[0];lbl.textContent=m[1];
 }
 
+
+/* ── Auto-login silencioso ─────────────────────────────────────────────────────────
+   Quando o celular/notebook recarrega a página (fundo de tela, troca de aba, refresh),
+   o app volta para a tela de login por padrão. Se já há um token salvo no localStorage,
+   tenta restaurar a sessão automaticamente sem que o usuário precise digitar senha.
+   Se o token expirou no servidor (getAll retorna erro), aí sim exibe a tela de login. */
+(function autoRestore(){
+  var token = localStorage.getItem("smg6_token");
+  var userJson = localStorage.getItem("smg6_user");
+  if(!token || !userJson) return; // sem sessão prévia — fica na tela de login
+  var user;
+  try { user = JSON.parse(userJson); } catch(e){ return; }
+  // Mostra o app imediatamente (UX: evita flash da tela de login)
+  var ls = document.getElementById("login-screen");
+  var appEl = document.getElementById("app");
+  if(ls) ls.style.display = "none";
+  if(appEl) appEl.style.display = "";
+  var saveEl = document.getElementById("save");
+  if(saveEl) saveEl.textContent = user.nome || user.email || "";
+  // Inicializa estado básico
+  state.view = "estoque"; state.sel = null; state.colab = null;
+  state.rep = "semana";
+  var yr = Number((today()||"2026").slice(0,4));
+  state.repYear = yr;
+  state.repWeek = weekOfYear(today());
+  state.repMonth = today().slice(0,7);
+  state.repStart = today().slice(0,8)+"01";
+  state.repEnd = today();
+  // Tenta carregar dados — se o token expirou, getAll retorna erro e vai para login
+  (async function(){
+    var ok = await loadAll();
+    if(!ok){
+      // Servidor rejeitou o token: pede login novamente
+      localStorage.removeItem("smg6_token");
+      localStorage.removeItem("smg6_user");
+      if(appEl) appEl.style.display = "none";
+      if(ls) ls.style.display = "flex";
+      showLogin();
+      return;
+    }
+    try{ await loadPins(); }catch(e){}
+    render();
+    // Menu de admin
+    var menuAdmin = document.getElementById("menuUsuarios");
+    if(menuAdmin) menuAdmin.style.display = (user.nivel==="admin")?"":"none";
+  })();
+})();
 
 /* ================= NAVEGAÇÃO (menu superior + abas Safety/Insumos) =================
    Reconecta os cliques dos botões do menu (Estoque, Colaboradores, Desligados,
