@@ -128,7 +128,8 @@
   @keyframes sl{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
   .loading{padding:50px;text-align:center;color:var(--txt-faint);font-family:var(--mono);letter-spacing:.1em}
   details>summary::-webkit-details-marker{display:none}
-  details[open]>summary>span:first-child{transform:rotate(90deg);display:inline-block}
+  details[open]>summary .det-arrow{transform:rotate(90deg)}
+  .det-arrow{display:inline-block;transition:transform .2s}
   .colab-select-wrap{padding:14px 16px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   .colab-select-wrap select{border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-family:var(--body);font-size:14px;min-width:280px;background:#fff;color:var(--txt)}
   .colab-select-wrap select:focus{outline:none;border-color:var(--blue)}
@@ -794,39 +795,67 @@ async function _uExcluir(email){
 
 function _uHistorico(){
   if(!isAdmin()){toast("Acesso restrito","erro");return;}
-  var body='<div id="hist-list"><div class="loading">Carregando…</div></div>';
+  // Mês padrão = mês atual
+  var agora=new Date();
+  var mesPad=(agora.getFullYear()+"-"+String(agora.getMonth()+1).padStart(2,"0"));
+  var body='<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">'
+    +'<div class="fg"><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-faint);font-weight:600">Mês</label>'
+    +'<input type="month" id="hist_mes" value="'+mesPad+'" style="border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-family:var(--body);font-size:14px"></div>'
+    +'<button class="btn primary sm" onclick="_uHistoricoFiltrar()" style="margin-top:18px">Filtrar</button>'
+    +'</div>'
+    +'<div id="hist-list"><div class="loading">Carregando…</div></div>';
   openModal("Histórico de Acesso",body,[{label:"Fechar",cls:"ghost",act:closeModal}]);
+  // Carregar dados e exibir mês atual
   api("getHistoricoAcesso",null,true).then(function(r){
-    var el=document.getElementById("hist-list");if(!el)return;
-    if(!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r.error)+'</div>';return;}
-    if(!r.data||!r.data.length){el.innerHTML='<div class="empty">Nenhum registro.</div>';return;}
-    var acaoLabel={
-      'login':'🔑 Login',
-      'trocaSenha':'🔒 Troca de Senha',
-      'resetSenha':'↺ Reset de Senha',
-      'saveUsuario':'👤 Usuário Salvo',
-      'deleteUsuario':'🗑 Usuário Excluído',
-      'saveMovimentacao':'📦 Movimentação',
-      'deleteMovimentacao':'✂ Exclusão de Movimentação',
-      'saveProduto':'➕ Produto Salvo',
-      'deleteProduto':'🗑 Produto Excluído',
-      'saveColaborador':'👷 Colaborador Salvo',
-      'saveDesligado':'⚠ Colaborador Desligado',
-      'getAll':'📂 Acesso ao Sistema'
-    };
-    var rows=r.data.slice(0,300).map(function(h){
-      var lbl=acaoLabel[h.acao]||h.acao||'—';
-      var chipCol=h.acao==='login'?'sai':h.acao.includes('delete')||h.acao.includes('Exclu')?'desl':'tam';
-      return '<tr>'
-        +'<td style="font-size:11px;font-family:var(--mono);white-space:nowrap;color:var(--txt-dim)">'+esc(h.ts)+'</td>'
-        +'<td><b>'+esc(h.nome||h.email)+'</b><br><span style="font-size:10px;color:var(--txt-faint)">'+esc(h.email)+'</span></td>'
-        +'<td><span class="chip '+chipCol+'">'+lbl+'</span></td>'
-        +'<td style="font-size:12px;color:var(--txt-dim)">'+esc(h.detalhes||"")+'</td></tr>';
-    }).join("")||'<tr><td colspan="4"><div class="empty">Nenhum registro ainda.</div></td></tr>';
-    el.innerHTML='<div style="max-height:460px;overflow:auto"><table style="font-size:12.5px">'
-      +'<thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead>'
-      +'<tbody>'+rows+'</tbody></table></div>';
+    window._histData=r;
+    _uHistoricoFiltrar();
   });
+}
+function _uHistoricoFiltrar(){
+  var r=window._histData;
+  var el=document.getElementById("hist-list");if(!el)return;
+  if(!r){el.innerHTML='<div class="loading">Carregando…</div>';return;}
+  if(!r.ok){el.innerHTML='<div class="empty">Erro: '+esc(r.error)+'</div>';return;}
+  if(!r.data||!r.data.length){el.innerHTML='<div class="empty">Nenhum registro.</div>';return;}
+  var mesSel=(document.getElementById("hist_mes")||{}).value||"";
+  var acaoLabel={
+    'login':'🔑 Login',
+    'trocaSenha':'🔒 Troca de Senha',
+    'resetSenha':'↺ Reset de Senha',
+    'saveUsuario':'👤 Usuário Salvo',
+    'deleteUsuario':'🗑 Usuário Excluído',
+    'saveMovimentacao':'📦 Movimentação',
+    'deleteMovimentacao':'✂ Exclusão de Movimentação',
+    'saveProduto':'➕ Produto Salvo',
+    'deleteProduto':'🗑 Produto Excluído',
+    'saveColaborador':'👷 Colaborador Salvo',
+    'saveDesligado':'⚠ Colaborador Desligado',
+    'saveRecibo':'📋 Recibo Salvo',
+    'getAll':'📂 Acesso ao Sistema'
+  };
+  // Filtrar pelo mês selecionado (ts começa com "YYYY-MM" ou "YYYY/MM" ou contém o mês)
+  var filtrado=mesSel
+    ?r.data.filter(function(h){
+        var ts=h.ts||"";
+        // Tenta extrair YYYY-MM do timestamp (vários formatos possíveis)
+        var m=ts.slice(0,7).replace("/","-");
+        return m===mesSel;
+      })
+    :r.data;
+  var total=filtrado.length;
+  var rows=filtrado.map(function(h){
+    var lbl=acaoLabel[h.acao]||h.acao||'—';
+    var chipCol=h.acao==='login'?'sai':h.acao.includes('delete')||h.acao.includes('Exclu')?'desl':'tam';
+    return '<tr>'
+      +'<td style="font-size:11px;font-family:var(--mono);white-space:nowrap;color:var(--txt-dim)">'+esc(h.ts)+'</td>'
+      +'<td><b>'+esc(h.nome||h.email)+'</b><br><span style="font-size:10px;color:var(--txt-faint)">'+esc(h.email)+'</span></td>'
+      +'<td><span class="chip '+chipCol+'">'+lbl+'</span></td>'
+      +'<td style="font-size:12px;color:var(--txt-dim)">'+esc(h.detalhes||"")+'</td></tr>';
+  }).join("")||'<tr><td colspan="4"><div class="empty">Nenhum registro neste mês.</div></td></tr>';
+  el.innerHTML='<div style="font-size:11.5px;color:var(--txt-faint);margin-bottom:8px">'+total+' registro'+(total===1?'':'s')+' no mês</div>'
+    +'<div style="max-height:400px;overflow:auto"><table style="font-size:12.5px">'
+    +'<thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table></div>';
 }
 
 function _uTrocaSenha(){
@@ -968,25 +997,26 @@ function viewEstoque(){
       if(p.tamanhos&&p.tamanhos.length>0){
         const tamDetail=p.tamanhos.map(t=>{
           const sT=saldoVar(p.id,t,"");
-          return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0">
-            <span class="chip tam">${esc(t)}</span>
-            <span style="font-family:var(--mono);font-weight:700;font-size:13px;color:${sT<=0?'var(--red)':'var(--blue)'}">${sT}</span>
-          </span>`;
+          const cor=sT<=0?'var(--red)':sT>0?'var(--green)':'var(--txt-faint)';
+          return `<div style="display:flex;flex-direction:column;align-items:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:52px;gap:2px">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--txt-dim)">${esc(t)}</span>
+            <span style="font-family:var(--mono);font-weight:800;font-size:16px;color:${cor}">${sT}</span>
+          </div>`;
         }).join("");
         return `<tr>
           <td colspan="5" style="padding:0">
             <details style="width:100%">
-              <summary style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;list-style:none;border-bottom:1px solid var(--line-soft)">
-                <span style="font-size:13px;color:var(--txt-faint);flex:0 0 14px">▶</span>
-                <b style="flex:1">${esc(p.descricao)}</b>
-                <span style="font-size:11px;color:var(--txt-faint);margin-right:8px">${esc(p.setor||"")}</span>
-                <span class="num ${saldo<=0?'qneg':'qpos'}" style="min-width:50px;text-align:right;font-family:var(--mono);font-weight:700">${saldo}</span>
-                <span class="num" style="min-width:90px;text-align:right;font-size:12px;color:var(--txt-faint)">${brl(cu)}</span>
-                <span class="num" style="min-width:90px;text-align:right;font-size:12px;color:var(--txt-faint)">${brl(saldo*cu)}</span>
+              <summary style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;list-style:none;border-bottom:1px solid var(--line-soft);user-select:none">
+                <span class="det-arrow" style="font-size:11px;color:var(--txt-faint);transition:transform .2s;flex:0 0 12px">▶</span>
+                <b style="flex:1;font-size:13.5px">${esc(p.descricao)}</b>
+                <span style="font-size:11px;color:var(--txt-faint);margin-right:12px">${esc(p.setor||"")}</span>
+                <span style="font-family:var(--mono);font-weight:700;font-size:14px;min-width:44px;text-align:right;color:${saldo<=0?'var(--red)':'var(--green)'}">${saldo}</span>
+                <span style="min-width:90px;text-align:right;font-size:12px;color:var(--txt-faint)">${brl(cu)}</span>
+                <span style="min-width:90px;text-align:right;font-size:12px;color:var(--txt-faint)">${brl(saldo*cu)}</span>
               </summary>
-              <div style="padding:8px 12px 10px 38px;background:#f9fafc;border-bottom:1px solid var(--line-soft)">
-                <span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-faint);font-weight:600;display:block;margin-bottom:6px">Saldo por tamanho</span>
-                <div style="display:flex;flex-wrap:wrap">${tamDetail}</div>
+              <div style="padding:12px 14px 14px 36px;background:#f6f8fb;border-bottom:1px solid var(--line-soft)">
+                <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600;margin-bottom:10px">Saldo por tamanho</div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px">${tamDetail}</div>
               </div>
             </details>
           </td>
@@ -2331,8 +2361,17 @@ function _wz_validarDados(){
   if(!colab||!prod||!qtd||qtd<=0||!lib||!data){toast("Preencha todos os campos obrigat\u00f3rios","erro");return;}
   if(!motivo){toast("Selecione o motivo da troca","erro");return;}
   if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
-  var saldo=atual(prod);
-  if(qtd>saldo){toast("Estoque insuficiente. Dispon\u00edvel: "+saldo+".","erro");return;}
+  // Verifica saldo: se tem tamanho selecionado, verifica saldo do tamanho específico
+  var saldo=tam?saldoVar(prod,tam,""):atual(prod);
+  if(qtd>saldo){
+    var msgTam=tam?" (tamanho "+tam+")":"";
+    toast("Estoque insuficiente"+msgTam+". Disponível: "+saldo+".","erro");
+    return;
+  }
+  if(saldo<=0){
+    toast("Sem estoque disponível"+(tam?" para tamanho "+tam:"")+".","erro");
+    return;
+  }
   EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs,motivo:motivo};
   _wz_step2();
 }
@@ -2444,6 +2483,8 @@ function _wz_capturarFoto(){
   c.width=v.videoWidth||640;c.height=v.videoHeight||480;
   c.getContext("2d").drawImage(v,0,0,c.width,c.height);
   EPI_WZ.fotoDataUrl=c.toDataURL("image/jpeg",0.85);
+  // Ocultar vídeo imediatamente (evita tela preta após parar a câmera)
+  if(v)v.style.display="none";
   var fi=document.getElementById("wz_foto_img");if(fi)fi.src=EPI_WZ.fotoDataUrl;
   var fp=document.getElementById("wz_foto_prev");if(fp)fp.style.display="block";
   var sb=document.getElementById("wz_snap_btn");if(sb)sb.style.display="none";
