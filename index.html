@@ -127,6 +127,8 @@
   .toast.ok{border-left-color:var(--green)}.toast.erro{border-left-color:var(--red)}.toast.warn{border-left-color:var(--amber)}
   @keyframes sl{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
   .loading{padding:50px;text-align:center;color:var(--txt-faint);font-family:var(--mono);letter-spacing:.1em}
+  details>summary::-webkit-details-marker{display:none}
+  details[open]>summary>span:first-child{transform:rotate(90deg);display:inline-block}
   .colab-select-wrap{padding:14px 16px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   .colab-select-wrap select{border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-family:var(--body);font-size:14px;min-width:280px;background:#fff;color:var(--txt)}
   .colab-select-wrap select:focus{outline:none;border-color:var(--blue)}
@@ -471,7 +473,7 @@ const prodOf=dom=>PRODUTOS.filter(p=>p.dom===dom);
 const movOf=pid=>MOVS.filter(m=>m.produtoId===pid);
 function selProd(){return PRODUTOS.find(p=>p.id===state.sel)||null;}
 function atual(pid){return movOf(pid).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
-function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>(m.tamanho||"")===(tam||"")&&(m.cor||"")===(cor||"")).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
+function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>(m.tamanho||"")===(tam||"")&&(cor===""||((m.cor||"")===(cor||"")))).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
 function custoUnit(pid){const e=movOf(pid).filter(m=>m.tipo==="entrada"&&m.custoUnit>0);return e.length?e[e.length-1].custoUnit:0;}
 function caAtualProduto(pid){
   if(!pid)return"";
@@ -962,19 +964,33 @@ function viewEstoque(){
     const todosProd=prods.map(p=>({p,saldo:atual(p.id)}));
     const resumoRows=todosProd.map(({p,saldo})=>{
       const cu=custoUnit(p.id);
-      // Se produto tem tamanhos definidos, exibir uma linha por tamanho
+      // Se produto tem tamanhos, mostra linha-mestre com saldo total + details clicável
       if(p.tamanhos&&p.tamanhos.length>0){
-        const tamRows=p.tamanhos.map(t=>{
+        const tamDetail=p.tamanhos.map(t=>{
           const sT=saldoVar(p.id,t,"");
-          return `<tr>
-            <td><b>${esc(p.descricao)}</b> <span class="chip tam">${esc(t)}</span></td>
-            <td>${esc(p.setor||"")}</td>
-            <td class="num ${sT<=0?'qneg':'qpos'}">${sT}</td>
-            <td class="num">${brl(cu)}</td>
-            <td class="num">${brl(sT*cu)}</td>
-          </tr>`;
+          return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0">
+            <span class="chip tam">${esc(t)}</span>
+            <span style="font-family:var(--mono);font-weight:700;font-size:13px;color:${sT<=0?'var(--red)':'var(--blue)'}">${sT}</span>
+          </span>`;
         }).join("");
-        return tamRows;
+        return `<tr>
+          <td colspan="5" style="padding:0">
+            <details style="width:100%">
+              <summary style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;list-style:none;border-bottom:1px solid var(--line-soft)">
+                <span style="font-size:13px;color:var(--txt-faint);flex:0 0 14px">▶</span>
+                <b style="flex:1">${esc(p.descricao)}</b>
+                <span style="font-size:11px;color:var(--txt-faint);margin-right:8px">${esc(p.setor||"")}</span>
+                <span class="num ${saldo<=0?'qneg':'qpos'}" style="min-width:50px;text-align:right;font-family:var(--mono);font-weight:700">${saldo}</span>
+                <span class="num" style="min-width:90px;text-align:right;font-size:12px;color:var(--txt-faint)">${brl(cu)}</span>
+                <span class="num" style="min-width:90px;text-align:right;font-size:12px;color:var(--txt-faint)">${brl(saldo*cu)}</span>
+              </summary>
+              <div style="padding:8px 12px 10px 38px;background:#f9fafc;border-bottom:1px solid var(--line-soft)">
+                <span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-faint);font-weight:600;display:block;margin-bottom:6px">Saldo por tamanho</span>
+                <div style="display:flex;flex-wrap:wrap">${tamDetail}</div>
+              </div>
+            </details>
+          </td>
+        </tr>`;
       }
       return `<tr>
         <td><b>${esc(p.descricao)}</b></td>
