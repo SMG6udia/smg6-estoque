@@ -833,13 +833,21 @@ function _uHistoricoFiltrar(){
     'saveRecibo':'📋 Recibo Salvo',
     'getAll':'📂 Acesso ao Sistema'
   };
-  // Filtrar pelo mês selecionado (ts começa com "YYYY-MM" ou "YYYY/MM" ou contém o mês)
+  // Filtrar pelo mês selecionado
+  // O Apps Script grava o timestamp no formato "DD/MM/YYYY, HH:MM:SS"
+  // O seletor retorna "YYYY-MM"
+  function tsMesAno(ts){
+    // Tenta formato "DD/MM/YYYY, HH:MM:SS" → extrai "YYYY-MM"
+    var m1=ts.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if(m1) return m1[3]+"-"+m1[2]; // YYYY-MM
+    // Fallback: tenta formato ISO "YYYY-MM-DD..." ou "YYYY-MM..."
+    var m2=ts.match(/^(\d{4})[-/](\d{2})/);
+    if(m2) return m2[1]+"-"+m2[2];
+    return "";
+  }
   var filtrado=mesSel
     ?r.data.filter(function(h){
-        var ts=h.ts||"";
-        // Tenta extrair YYYY-MM do timestamp (vários formatos possíveis)
-        var m=ts.slice(0,7).replace("/","-");
-        return m===mesSel;
+        return tsMesAno(h.ts||"")===mesSel;
       })
     :r.data;
   var total=filtrado.length;
