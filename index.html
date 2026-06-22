@@ -1186,7 +1186,10 @@ function viewDesligados(){
     <td><b>${esc(n)}</b></td>
     <td><span class="chip desl">Desligado</span></td>
     <td class="num">${MOVS.filter(m=>m.tipo==="saida"&&m.parte===n).length}</td>
-    <td><button class="btn ghost sm" onclick="state.histColab='${esc(n)}';render()">📋 Histórico</button></td>
+    <td style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn ghost sm" onclick="state.histColab='${esc(n)}';render()">📋 Histórico</button>
+      <button class="btn danger sm" onclick="excluirDesligado('${esc(n)}')">🗑 Excluir</button>
+    </td>
   </tr>`).join("") || `<tr><td colspan="4"><div class="empty">Nenhum desligado registrado.</div></td></tr>`;
   return `<div class="panel">
     <div class="panel-bar"><h3>Colaboradores Desligados</h3></div>
@@ -1274,6 +1277,21 @@ async function desligarColab(nome){
   await persistDesl(nome);
   state.colab=null;
   toast(`${nome} movido para Desligados.`,"warn");render();
+}
+
+async function excluirDesligado(nome){
+  const ok=await confirmModal(
+    "Excluir Desligado",
+    `Excluir permanentemente <b>${esc(nome)}</b> da lista de desligados?<br><small style="color:var(--txt-dim)">O histórico de movimentações será preservado.</small>`,
+    "Excluir"
+  );
+  if(!ok)return;
+  const r=await api("saveDesligado",{nome,acao:"excluir"});
+  if(!r.ok){toast("Erro ao excluir: "+r.error,"erro");return;}
+  DESLIGADOS=DESLIGADOS.filter(d=>d!==nome);
+  COLAB_PLANILHA_DESLIGADOS=(COLAB_PLANILHA_DESLIGADOS||[]).filter(d=>d!==nome);
+  toast(nome+" removido da lista de desligados.","ok");
+  render();
 }
 
 /* ================= RELATÓRIOS ================= */
@@ -2283,6 +2301,7 @@ function _wz_step1(prods,prefColab){
     +'<div class="mfield full"><label>EPI / Produto <span class="req">*</span></label><select id="ew_prod">'+prodOpts+'</select></div>'
     +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
     +'<div class="mfield"><label>Dispon&iacute;vel</label><input id="ew_disp" readonly value="&#8212;"></div>'
+    +'<div id="ew_tipo_wrap" class="mfield full" style="display:none"><label>Tipo / Modelo <span style="font-size:10px;color:var(--txt-faint)">(opcional)</span></label><select id="ew_tipo"><option value="">— nenhum —</option></select></div>'
     +'<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="ew_qtd" min="1" step="1" value="1"></div>'
     +'<div class="mfield"><label>Motivo da troca <span class="req">*</span></label><select id="ew_motivo"><option value="">&#8212; selecione &#8212;</option><option value="Primeiro Item">Primeiro Item</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
     +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: detalhe adicional&#8230;"></div>'
@@ -2304,6 +2323,18 @@ function _wz_step1(prods,prefColab){
         pr.tamanhos.forEach(function(t){ts.innerHTML+='<option>'+esc(t)+'</option>';});
         // Pré-seleciona o primeiro tamanho para exibir o saldo imediatamente
         if(pr.tamanhos.length>0) ts.value=pr.tamanhos[0];
+      }
+      // Preencher campo Tipo/Modelo se o produto tiver cores/tipos cadastrados
+      var tipoWrap=document.getElementById("ew_tipo_wrap");
+      var tipoSel=document.getElementById("ew_tipo");
+      if(tipoSel){
+        tipoSel.innerHTML='<option value="">— nenhum —</option>';
+        if(pr&&pr.cores&&pr.cores.length){
+          pr.cores.forEach(function(c){tipoSel.innerHTML+='<option>'+esc(c)+'</option>';});
+          if(tipoWrap)tipoWrap.style.display="";
+        }else{
+          if(tipoWrap)tipoWrap.style.display="none";
+        }
       }
       upd();
     }
@@ -2357,6 +2388,7 @@ function _wz_validarDados(){
   var tam=((document.getElementById("ew_tam")||{}).value)||"";
   var obs=((document.getElementById("ew_obs")||{}).value)||"";
   var motivo=((document.getElementById("ew_motivo")||{}).value)||"";
+  var tipoModelo=((document.getElementById("ew_tipo")||{}).value)||"";
   var p=PRODUTOS.find(function(x){return x.id===prod;});
   if(!colab||!prod||!qtd||qtd<=0||!lib||!data){toast("Preencha todos os campos obrigat\u00f3rios","erro");return;}
   if(!motivo){toast("Selecione o motivo da troca","erro");return;}
@@ -2372,7 +2404,7 @@ function _wz_validarDados(){
     toast("Sem estoque disponível"+(tam?" para tamanho "+tam:"")+".","erro");
     return;
   }
-  EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs,motivo:motivo};
+  EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs,motivo:motivo,tipoModelo:tipoModelo};
   _wz_step2();
 }
 
@@ -2577,8 +2609,8 @@ async function _wz_finalizar(){
     +(d.obs?((d.motivo?" — ":"")+d.obs):"")
     +" [COD: "+codigoValidacao+"]";
   var wzMov={id:movId,_t:Date.now(),produtoId:p.id,dom:"safety",tipo:"saida",
-    data:d.data,qtd:d.qtd,tamanho:d.tam,cor:"",parte:d.colab,liberadoPor:d.lib,obs:obsPersist,
-    motivo:d.motivo||"",codigo:codigoValidacao,
+    data:d.data,qtd:d.qtd,tamanho:d.tam,cor:d.tipoModelo||"",parte:d.colab,liberadoPor:d.lib,obs:obsPersist,
+    motivo:d.motivo||"",codigo:codigoValidacao,tipoModelo:d.tipoModelo||"",
     temRecibo:true,fotoUrl:fotoSnap,assinUrl:assinSnap};
   // Persistir sem as imagens (JSONP/GET não comporta base64 grande; o backend não guarda imagens)
   var movPersist=Object.assign({},wzMov);delete movPersist.fotoUrl;delete movPersist.assinUrl;
@@ -2697,6 +2729,7 @@ async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
     +'<div class="cell full"><label>Produto / EPI</label><div class="v">'+p.descricao+'</div></div>'
     +caCell
     +tamCell
+    +(d.tipoModelo?'<div class="cell"><label>Tipo / Modelo</label><div class="v">'+esc(d.tipoModelo)+'</div></div>':'')
     +'<div class="cell"><label>Quantidade</label><div class="v">'+d.qtd+' '+(p.unidade||'UN')+'</div></div>'
     +'<div class="cell"><label>Data de Entrega</label><div class="v">'+fmtD(d.data)+'</div></div>'
     +'<div class="cell"><label>Liberado por</label><div class="v">'+d.lib+'</div></div>'
