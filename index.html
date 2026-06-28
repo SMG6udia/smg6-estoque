@@ -434,7 +434,7 @@ const COLAB_PLANILHA_ATIVOS=[
   "Thiago Vieira Dos Santos","Davi Dos Santos Vieira","Eduardo Henrique Alves Reis",
   "Felipe De Paula Assis","Tiago Medeiros Sousa","Teyllon Cristian Da Silva Oliveira"
 ];
-const COLAB_PLANILHA_DESLIGADOS=[
+let COLAB_PLANILHA_DESLIGADOS=[
   "Denner Ferreira Souza","Douglas Henrique Silva Souza","Francisco Flávio de Freitas Ferreira Júnior",
   "Janderson Crispim da Silva","Maikon Wisney Gonçalves da Silva","Priscillane Pereira da Silva",
   "Wesley Ferreira Costa"
@@ -1441,13 +1441,34 @@ function viewRel(){
   // ----- Gráfico de EVOLUÇÃO DO SALDO ao longo do período -----
   // Pontos: se item específico → saldo daquele item; senão → saldo total do domínio (todos os itens).
   const evoPts=buildEvolucao(dom,start,end,state.repItem);
-  const evoSVG=lineChartSVG(evoPts,state.repItem?("Saldo de "+(PRODUTOS.find(x=>x.id===state.repItem)||{descricao:""}).descricao):"Saldo total em estoque");
-  const evoBlock=`<div class="panel" style="grid-column:1 / -1">
-    <div class="panel-bar"><h3>Evolução do Saldo — ${periodoLbl}</h3>
-      <div class="legend"><span><span class="dot" style="background:#2D3277"></span>${state.repItem?"Saldo do item":"Saldo total"}</span></div>
-    </div>
-    <div style="padding:14px 8px 6px">${evoSVG}</div>
-  </div>`;
+  const selectedProd=state.repItem?PRODUTOS.find(x=>x.id===state.repItem):null;
+  const evoSVG=lineChartSVG(evoPts,selectedProd?("Saldo de "+selectedProd.descricao):"Saldo total em estoque");
+  let evoBlock;
+  if(state.repItem&&selectedProd){
+    const entSaiPts=buildEntSaiEvolucao(dom,state.repItem,start,end);
+    const dualSVG=dualLineChartSVG(entSaiPts);
+    const hasTams=selectedProd.tamanhos&&selectedProd.tamanhos.length>0;
+    const tamChart=hasTams?buildTamBarChart(state.repItem,selectedProd.tamanhos,start,end):"";
+    evoBlock=`<div class="panel" style="grid-column:1 / -1">
+      <div class="panel-bar"><h3>Evolução — ${esc(selectedProd.descricao)} · ${periodoLbl}</h3>
+        <div class="legend">
+          <span><span class="dot" style="background:#27b863"></span>Entradas acum.</span>
+          <span><span class="dot" style="background:#e8554a"></span>Saídas acum.</span>
+          <span><span class="dot" style="background:#2D3277"></span>Saldo</span>
+        </div>
+      </div>
+      <div style="padding:14px 8px 2px"><div style="font-size:11px;font-weight:700;color:var(--txt-dim);margin-bottom:4px;padding-left:8px">Entradas × Saídas (acumulado no período)</div>${dualSVG}</div>
+      <div style="padding:4px 8px 6px"><div style="font-size:11px;font-weight:700;color:var(--txt-dim);margin-bottom:4px;padding-left:8px">Evolução do Saldo</div>${evoSVG}</div>
+      ${hasTams?`<div style="padding:8px 14px 14px"><div style="font-size:11px;font-weight:700;color:var(--txt-dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Por Tamanho — ${periodoLbl}</div>${tamChart}</div>`:""}
+    </div>`;
+  }else{
+    evoBlock=`<div class="panel" style="grid-column:1 / -1">
+      <div class="panel-bar"><h3>Evolução do Saldo Total — ${periodoLbl}</h3>
+        <div class="legend"><span><span class="dot" style="background:#2D3277"></span>Saldo total</span></div>
+      </div>
+      <div style="padding:14px 8px 6px">${evoSVG}</div>
+    </div>`;
+  }
 
   // ----- ALERTA DE ESTOQUE MÍNIMO -----
   const alertas=itensAbaixoMin(dom);
@@ -1596,6 +1617,89 @@ function buildEvolucao(dom,start,end,pid){
     if(!pts.length||pts[pts.length-1].x!==dsEnd)pts.push({x:dsEnd,label:String(ed.getDate()).padStart(2,"0")+"/"+String(ed.getMonth()+1).padStart(2,"0"),y:saldoConjuntoAte(dsEnd)});
   }
   return pts;
+}
+
+/* ===== Série dupla entradas/saídas acumuladas no período ===== */
+function buildEntSaiEvolucao(dom,prodId,start,end){
+  const sd=new Date(start),ed=new Date(end);
+  const totalDays=Math.round((ed-sd)/86400000)+1;
+  const step=totalDays<=31?1:7;
+  const pts=[];
+  for(let i=0;i<totalDays;i+=step){
+    const d=new Date(sd);d.setDate(d.getDate()+i);const ds=d.toISOString().slice(0,10);
+    const label=String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+    const entAte=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="entrada"&&m.data>=start&&m.data<=ds).reduce((s,m)=>s+(m.qtd||0),0);
+    const saiAte=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="saida"&&m.data>=start&&m.data<=ds).reduce((s,m)=>s+(m.qtd||0),0);
+    pts.push({x:ds,label,ent:entAte,sai:saiAte});
+  }
+  const dsEnd=ed.toISOString().slice(0,10);
+  if(!pts.length||pts[pts.length-1].x!==dsEnd){
+    const entF=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="entrada"&&m.data>=start&&m.data<=dsEnd).reduce((s,m)=>s+(m.qtd||0),0);
+    const saiF=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="saida"&&m.data>=start&&m.data<=dsEnd).reduce((s,m)=>s+(m.qtd||0),0);
+    const lbl=String(ed.getDate()).padStart(2,"0")+"/"+String(ed.getMonth()+1).padStart(2,"0");
+    pts.push({x:dsEnd,label:lbl,ent:entF,sai:saiF});
+  }
+  return pts;
+}
+
+/* ===== SVG: duas linhas (entradas verde, saídas vermelho) ===== */
+function dualLineChartSVG(pts){
+  if(!pts||pts.length<2)return `<div class="empty">Dados insuficientes para o gráfico.</div>`;
+  const W=900,H=220,pl=48,pr=18,pt=18,pb=42;
+  const iw=W-pl-pr,ih=H-pt-pb;
+  const ents=pts.map(p=>p.ent),sais=pts.map(p=>p.sai);
+  let ymax=Math.max(...ents,...sais,1);
+  const range=ymax||1;
+  const X=i=>pl+(i/(pts.length-1))*iw;
+  const Y=v=>pt+ih-(v/range)*ih;
+  let grid="",ylab="";
+  for(let g=0;g<=4;g++){const val=range*g/4;const yy=Y(val);
+    grid+=`<line x1="${pl}" y1="${yy.toFixed(1)}" x2="${W-pr}" y2="${yy.toFixed(1)}" stroke="#e6ebf1" stroke-width="1"/>`;
+    ylab+=`<text x="${pl-8}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#8b94a3" font-family="monospace">${Math.round(val)}</text>`;
+  }
+  const pathEnt=pts.map((p,i)=>(i===0?"M":"L")+X(i).toFixed(1)+","+Y(p.ent).toFixed(1)).join(" ");
+  const pathSai=pts.map((p,i)=>(i===0?"M":"L")+X(i).toFixed(1)+","+Y(p.sai).toFixed(1)).join(" ");
+  const stepX=Math.ceil(pts.length/8);
+  let xlab="";
+  for(let i=0;i<pts.length;i+=stepX)xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-8).toFixed(1)}" text-anchor="middle" font-size="10" fill="#8b94a3">${pts[i].label}</text>`;
+  if(pts.length>1&&(pts.length-1)%stepX!==0)xlab+=`<text x="${X(pts.length-1).toFixed(1)}" y="${(H-8).toFixed(1)}" text-anchor="middle" font-size="10" fill="#8b94a3">${pts[pts.length-1].label}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:220px;display:block">
+    ${grid}${ylab}${xlab}
+    <path d="${pathEnt}" fill="none" stroke="#27b863" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${pathSai}" fill="none" stroke="#e8554a" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+
+/* ===== Barras horizontais de entradas/saídas por tamanho ===== */
+function buildTamBarChart(prodId,tamanhos,start,end){
+  if(!tamanhos||!tamanhos.length)return "";
+  const rows=tamanhos.map(function(tam){
+    const ent=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="entrada"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+    const sai=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="saida"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+    const sal=saldoVar(prodId,tam,"");
+    const maxV=Math.max(ent,sai,sal,1);
+    const barW=180;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid var(--line-soft)">
+      <div style="min-width:52px;text-align:center"><span class="chip tam">${esc(tam)}</span></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:${Math.round(ent/maxV*barW)}px;height:10px;background:#27b863;border-radius:3px;min-width:${ent>0?4:0}px;transition:width .3s"></div>
+          <span style="font-size:11.5px;color:var(--green);font-weight:700">${ent}</span>
+          <span style="font-size:10.5px;color:var(--txt-faint)">entradas</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:${Math.round(sai/maxV*barW)}px;height:10px;background:#e8554a;border-radius:3px;min-width:${sai>0?4:0}px;transition:width .3s"></div>
+          <span style="font-size:11.5px;color:var(--red);font-weight:700">${sai}</span>
+          <span style="font-size:10.5px;color:var(--txt-faint)">saídas</span>
+        </div>
+      </div>
+      <div style="min-width:64px;text-align:right">
+        <div style="font-size:14px;font-weight:700;color:${sal<=0?"var(--red)":"var(--blue)"}">${sal}</div>
+        <div style="font-size:10px;color:var(--txt-faint)">saldo atual</div>
+      </div>
+    </div>`;
+  }).join("");
+  return `<div style="border:1px solid var(--line);border-radius:8px;overflow:hidden">${rows}</div>`;
 }
 
 /* ===== Gráfico de linha SVG (responsivo) ===== */
@@ -2259,7 +2363,7 @@ async function submitMov(tipo){
 /* ===============================================================
    ENTREGA DE EPI — WIZARD  (Dados → PIN → Foto → Assinatura → PDF)
    =============================================================== */
-const EPI_WZ={step:0,dados:{},fotoDataUrl:null,assinDataUrl:null,stream:null,pinOk:false};
+const EPI_WZ={step:0,dados:{},itens:[],fotoDataUrl:null,assinDataUrl:null,stream:null,pinOk:false};
 const KEY_PINS="smg6f_pins";
 let PINS={};
 async function loadPins(){} // PINs vêm do Sheets sob demanda
@@ -2268,7 +2372,7 @@ async function savePins(){} // não usado — savePin usa API diretamente
 function formEntrega(prefColab){
   const prods=prodOf("safety").slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
   if(!prods.length){toast("Cadastre produtos de Safety primeiro","erro");return;}
-  EPI_WZ.step=1;EPI_WZ.dados={};EPI_WZ.fotoDataUrl=null;EPI_WZ.assinDataUrl=null;EPI_WZ.pinOk=false;
+  EPI_WZ.step=1;EPI_WZ.dados={};EPI_WZ.itens=[];EPI_WZ.fotoDataUrl=null;EPI_WZ.assinDataUrl=null;EPI_WZ.pinOk=false;
   if(EPI_WZ.stream){EPI_WZ.stream.getTracks().forEach(t=>t.stop());EPI_WZ.stream=null;}
   _wz_step1(prods,prefColab);
 }
@@ -2306,18 +2410,95 @@ function _wz_step1(prods,prefColab){
     +'<div class="mfield"><label>Data <span class="req">*</span></label><input type="date" id="ew_data" value="'+today()+'"></div>'
     +'<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="ew_lib" placeholder="Respons&aacute;vel pela entrega"></div>'
     +'<div class="mfield full"><label>Colaborador (recebe) <span class="req">*</span></label><select id="ew_colab">'+colabOpts+'</select></div>'
+    +'</div>'
+    +'<div style="margin:14px 0 4px;font-size:11.5px;font-weight:700;color:var(--txt-dim);text-transform:uppercase;letter-spacing:.07em">EPIs a entregar</div>'
+    +'<div id="ew_lista_itens" style="min-height:40px;border:1.5px dashed var(--line);border-radius:8px;padding:8px 10px;margin-bottom:12px">'
+    +'<span id="ew_lista_vazia" style="color:var(--txt-faint);font-size:12px">Nenhum EPI adicionado ainda. Use o formulário abaixo.</span>'
+    +'</div>'
+    +'<div style="background:#f7f9fb;border-radius:8px;padding:12px 14px;border:1px solid var(--line)">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:10px;text-transform:uppercase;letter-spacing:.07em">&#43; Adicionar EPI à lista</div>'
+    +'<div class="mgrid">'
     +'<div class="mfield full"><label>EPI / Produto <span class="req">*</span></label><select id="ew_prod">'+prodOpts+'</select></div>'
     +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
     +'<div class="mfield"><label>Dispon&iacute;vel</label><input id="ew_disp" readonly value="&#8212;"></div>'
     +'<div id="ew_tipo_wrap" class="mfield full" style="display:none"><label>Tipo / Modelo <span style="font-size:10px;color:var(--txt-faint)">(opcional)</span></label><select id="ew_tipo"><option value="">— nenhum —</option></select></div>'
     +'<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="ew_qtd" min="1" step="1" value="1"></div>'
-    +'<div class="mfield"><label>Motivo da troca <span class="req">*</span></label><select id="ew_motivo"><option value="">&#8212; selecione &#8212;</option><option value="Primeiro Item">Primeiro Item</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
+    +'<div class="mfield"><label>Motivo <span class="req">*</span></label><select id="ew_motivo"><option value="">&#8212; selecione &#8212;</option><option value="Primeiro Item">Primeiro Item</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
     +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: detalhe adicional&#8230;"></div>'
+    +'</div>'
+    +'<button type="button" class="btn primary sm" style="margin-top:4px" onclick="_wz_adicionarItem()">&#43; Adicionar à lista</button>'
     +'</div>';
   openModal("Nova Entrega de EPI \u2014 Etapa 1 de 4",body,[
     {label:"Cancelar",cls:"ghost",act:function(){closeModal();}},
     {label:"Pr&oacute;ximo: CPF \u2192",cls:"primary",act:_wz_validarDados}
   ]);
+
+/* ── Lista de itens do wizard (renderiza dentro do modal aberto) ── */
+function _wz_renderListaItens(){
+  var cont=document.getElementById("ew_lista_itens");
+  if(!cont)return;
+  if(!EPI_WZ.itens||!EPI_WZ.itens.length){
+    cont.innerHTML='<span style="color:var(--txt-faint);font-size:12px">Nenhum EPI adicionado ainda. Use o formulário abaixo.</span>';
+    return;
+  }
+  var html='';
+  EPI_WZ.itens.forEach(function(it,idx){
+    var tam=it.tam?'<span class="chip tam" style="margin-left:4px">'+esc(it.tam)+'</span>':'';
+    var tipo=it.tipoModelo?'<span class="chip" style="margin-left:4px">'+esc(it.tipoModelo)+'</span>':'';
+    var mot=it.motivo?'<span style="color:var(--txt-faint);font-size:10.5px;margin-left:6px">'+esc(it.motivo)+'</span>':'';
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid var(--line-soft)">'
+      +'<span style="flex:1;font-size:12.5px"><b>'+esc(it.descricao)+'</b>'+tam+tipo
+      +' <span style="color:var(--txt-dim);font-weight:700">×'+it.qtd+'</span>'+mot+'</span>'
+      +'<button type="button" class="btn ghost sm" style="font-size:11px;padding:2px 7px;color:var(--red);min-width:0" onclick="_wz_removerItem('+idx+')">✕</button>'
+      +'</div>';
+  });
+  cont.innerHTML=html;
+}
+
+function _wz_adicionarItem(){
+  var prod=((document.getElementById("ew_prod")||{}).value)||"";
+  var qtd=Number(((document.getElementById("ew_qtd")||{}).value)||0);
+  var tam=((document.getElementById("ew_tam")||{}).value)||"";
+  var obs=((document.getElementById("ew_obs")||{}).value)||"";
+  var motivo=((document.getElementById("ew_motivo")||{}).value)||"";
+  var tipoModelo=((document.getElementById("ew_tipo")||{}).value)||"";
+  var p=PRODUTOS.find(function(x){return x.id===prod;});
+  if(!prod){toast("Selecione um EPI","erro");return;}
+  if(!qtd||qtd<=0){toast("Informe a quantidade","erro");return;}
+  if(!motivo){toast("Selecione o motivo","erro");return;}
+  if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
+  // Calcula qtd já na lista para esse produto+tamanho
+  var qtdNaLista=EPI_WZ.itens.filter(function(it){return it.prod===prod&&it.tam===tam;}).reduce(function(s,it){return s+it.qtd;},0);
+  var saldo=tam?saldoVar(prod,tam,""):atual(prod);
+  if(qtdNaLista+qtd>saldo){toast("Estoque insuficiente"+(tam?" (tam. "+tam+")":"")+". Disponível: "+saldo+" · Na lista: "+qtdNaLista+".","erro");return;}
+  // Agrupa com item igual se existir
+  var existente=EPI_WZ.itens.find(function(it){return it.prod===prod&&it.tam===tam&&it.tipoModelo===tipoModelo&&it.motivo===motivo;});
+  if(existente){
+    existente.qtd+=qtd;
+    if(obs)existente.obs=(existente.obs?existente.obs+" / ":"")+obs;
+  }else{
+    EPI_WZ.itens.push({prod:prod,descricao:p?p.descricao:prod,tam:tam,qtd:qtd,obs:obs,motivo:motivo,tipoModelo:tipoModelo});
+  }
+  // Limpa campos de produto para facilitar próxima adição
+  var ps=document.getElementById("ew_prod"),ts=document.getElementById("ew_tam"),
+      ms=document.getElementById("ew_motivo"),qs=document.getElementById("ew_qtd"),
+      os=document.getElementById("ew_obs"),disp=document.getElementById("ew_disp");
+  if(ps)ps.value="";
+  if(ts)ts.innerHTML='<option value="">&#8212;</option>';
+  if(ms)ms.value="";
+  if(qs)qs.value="1";
+  if(os)os.value="";
+  if(disp)disp.value="—";
+  var tw=document.getElementById("ew_tipo_wrap");if(tw)tw.style.display="none";
+  _wz_renderListaItens();
+  toast((p?p.descricao:prod)+" adicionado à lista","ok");
+}
+
+function _wz_removerItem(idx){
+  EPI_WZ.itens.splice(idx,1);
+  _wz_renderListaItens();
+}
+
   setTimeout(function(){
     var ps=document.getElementById("ew_prod"),
         ts=document.getElementById("ew_tam"),
@@ -2389,30 +2570,14 @@ function _wz_step1(prods,prefColab){
 function _wz_validarDados(){
   var colab=(document.getElementById("ew_colab")||{}).value||"";
   colab=colab.trim();
-  var prod=((document.getElementById("ew_prod")||{}).value)||"";
-  var qtd=Number(((document.getElementById("ew_qtd")||{}).value)||0);
   var lib=((document.getElementById("ew_lib")||{}).value||"").trim();
   var data=((document.getElementById("ew_data")||{}).value)||"";
-  var tam=((document.getElementById("ew_tam")||{}).value)||"";
-  var obs=((document.getElementById("ew_obs")||{}).value)||"";
-  var motivo=((document.getElementById("ew_motivo")||{}).value)||"";
-  var tipoModelo=((document.getElementById("ew_tipo")||{}).value)||"";
-  var p=PRODUTOS.find(function(x){return x.id===prod;});
-  if(!colab||!prod||!qtd||qtd<=0||!lib||!data){toast("Preencha todos os campos obrigat\u00f3rios","erro");return;}
-  if(!motivo){toast("Selecione o motivo da troca","erro");return;}
-  if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
-  // Verifica saldo: se tem tamanho selecionado, verifica saldo do tamanho específico
-  var saldo=tam?saldoVar(prod,tam,""):atual(prod);
-  if(qtd>saldo){
-    var msgTam=tam?" (tamanho "+tam+")":"";
-    toast("Estoque insuficiente"+msgTam+". Disponível: "+saldo+".","erro");
-    return;
-  }
-  if(saldo<=0){
-    toast("Sem estoque disponível"+(tam?" para tamanho "+tam:"")+".","erro");
-    return;
-  }
-  EPI_WZ.dados={colab:colab,prod:prod,qtd:qtd,lib:lib,data:data,tam:tam,obs:obs,motivo:motivo,tipoModelo:tipoModelo};
+  if(!colab||!lib||!data){toast("Preencha Colaborador, Data e Liberado por","erro");return;}
+  if(!EPI_WZ.itens||!EPI_WZ.itens.length){toast("Adicione pelo menos um EPI à lista antes de continuar","erro");return;}
+  // Preenche dados de cabeçalho + copia primeiro item p/ compatibilidade com etapas 2-4
+  var fi=EPI_WZ.itens[0];
+  EPI_WZ.dados={colab:colab,lib:lib,data:data,
+    prod:fi.prod,qtd:fi.qtd,tam:fi.tam,obs:fi.obs,motivo:fi.motivo,tipoModelo:fi.tipoModelo};
   _wz_step2();
 }
 
@@ -2603,31 +2768,51 @@ async function _wz_finalizar(){
   var c=document.getElementById("sig_canvas");
   EPI_WZ.assinDataUrl=c?c.toDataURL("image/png"):null;
   var d=EPI_WZ.dados;
-  var p=PRODUTOS.find(function(x){return x.id===d.prod;});
   var colabObjFin=COLABORADORES.find(function(x){return x.nome===d.colab;});
   if(colabObjFin)d.cpf=colabObjFin.cpf||"";
-  d.ca=caAtualProduto(p&&p.id);
   var fotoSnap=EPI_WZ.fotoDataUrl||null;
   var assinSnap=EPI_WZ.assinDataUrl||null;
-  var movId=uid();
-  var codigoValidacao=gerarCodigoValidacao(movId);
-  d.codigo=codigoValidacao;
-  // Monta a observação persistida incluindo motivo e código de validação
-  var obsPersist=(d.motivo?("Motivo: "+d.motivo):"")
-    +(d.obs?((d.motivo?" — ":"")+d.obs):"")
-    +" [COD: "+codigoValidacao+"]";
-  var wzMov={id:movId,_t:Date.now(),produtoId:p.id,dom:"safety",tipo:"saida",
-    data:d.data,qtd:d.qtd,tamanho:d.tam,cor:d.tipoModelo||"",parte:d.colab,liberadoPor:d.lib,obs:obsPersist,
-    motivo:d.motivo||"",codigo:codigoValidacao,tipoModelo:d.tipoModelo||"",
-    temRecibo:true,fotoUrl:fotoSnap,assinUrl:assinSnap};
-  // Persistir sem as imagens (JSONP/GET não comporta base64 grande; o backend não guarda imagens)
-  var movPersist=Object.assign({},wzMov);delete movPersist.fotoUrl;delete movPersist.assinUrl;
-  const r_w=await persistMov(movPersist);if(!r_w){toast("Erro ao salvar entrega","erro");return;}
-  MOVS.push(wzMov);
+  // Lista de itens (compatibilidade retroativa: se itens vazio, usa dados legado)
+  var itensParaSalvar=EPI_WZ.itens&&EPI_WZ.itens.length
+    ?EPI_WZ.itens
+    :[{prod:d.prod,descricao:"",qtd:d.qtd,tam:d.tam,obs:d.obs,motivo:d.motivo,tipoModelo:d.tipoModelo}];
+  var savedMovs=[];var firstMov=null;
+  for(var _i=0;_i<itensParaSalvar.length;_i++){
+    var it=itensParaSalvar[_i];
+    var p=PRODUTOS.find(function(x){return x.id===it.prod;});
+    if(!p)continue;
+    var movId=uid();
+    var codigoValidacao=gerarCodigoValidacao(movId);
+    var obsPersist=(it.motivo?("Motivo: "+it.motivo):"")
+      +(it.obs?((it.motivo?" — ":"")+it.obs):"")
+      +" [COD: "+codigoValidacao+"]";
+    var wzMov={id:movId,_t:Date.now(),produtoId:p.id,dom:"safety",tipo:"saida",
+      data:d.data,qtd:it.qtd,tamanho:it.tam||"",cor:it.tipoModelo||"",
+      parte:d.colab,liberadoPor:d.lib,obs:obsPersist,
+      motivo:it.motivo||"",codigo:codigoValidacao,tipoModelo:it.tipoModelo||"",
+      temRecibo:true,fotoUrl:fotoSnap,assinUrl:assinSnap};
+    var movPersist=Object.assign({},wzMov);delete movPersist.fotoUrl;delete movPersist.assinUrl;
+    const r_w=await persistMov(movPersist);
+    if(!r_w){toast("Erro ao salvar "+p.descricao,"erro");continue;}
+    MOVS.push(wzMov);
+    savedMovs.push({mov:wzMov,p:p,it:it,codigo:codigoValidacao});
+    if(!firstMov)firstMov=wzMov;
+  }
+  if(!savedMovs.length){toast("Nenhum item pôde ser salvo.","erro");return;}
   closeModal();
-  toast("Entrega registrada: "+d.qtd+"× "+p.descricao+" → "+d.colab,"ok");
-  var reciboHtml=await _wz_gerarPDF(d,p,fotoSnap,assinSnap);
-  salvarReciboDrive(wzMov,reciboHtml);
+  toast(savedMovs.length===1
+    ?"Entrega registrada: "+savedMovs[0].it.qtd+"× "+savedMovs[0].p.descricao+" → "+d.colab
+    :"Entrega registrada: "+savedMovs.length+" EPIs → "+d.colab
+  ,"ok");
+  // Gera PDF com todos os itens
+  var itensPDF=itensParaSalvar.map(function(it,i){
+    var pp=PRODUTOS.find(function(x){return x.id===it.prod;})||{descricao:it.descricao||"",unidade:"UN"};
+    return Object.assign({},it,{descricao:pp.descricao,unidade:pp.unidade||"UN",
+      ca:caAtualProduto(pp.id),codigo:savedMovs[i]?savedMovs[i].codigo:""});
+  });
+  var dParaPDF=Object.assign({},d,{itens:itensPDF,codigo:savedMovs.length===1?savedMovs[0].codigo:""});
+  var reciboHtml=await _wz_gerarPDF(dParaPDF,savedMovs[0].p,fotoSnap,assinSnap);
+  if(firstMov)salvarReciboDrive(firstMov,reciboHtml);
   state.dom="safety";state.view="colaboradores";state.colab=d.colab;render();
 }
 
@@ -2732,18 +2917,44 @@ async function _wz_gerarPDF(d,p,fotoUrl,assinUrl){
     +'<div class="cell"><label>Nome Completo</label><div class="v">'+d.colab+'</div></div>'
     +cpfCell
     +'</div></div>'
-    +'<div style="margin-bottom:16px"><div class="sec-title">Dados do EPI Entregue</div>'
-    +'<div class="grid2">'
-    +'<div class="cell full"><label>Produto / EPI</label><div class="v">'+p.descricao+'</div></div>'
-    +caCell
-    +tamCell
-    +(d.tipoModelo?'<div class="cell"><label>Tipo / Modelo</label><div class="v">'+esc(d.tipoModelo)+'</div></div>':'')
-    +'<div class="cell"><label>Quantidade</label><div class="v">'+d.qtd+' '+(p.unidade||'UN')+'</div></div>'
-    +'<div class="cell"><label>Data de Entrega</label><div class="v">'+fmtD(d.data)+'</div></div>'
-    +'<div class="cell"><label>Liberado por</label><div class="v">'+d.lib+'</div></div>'
-    +motivoCell
-    +obsCell
-    +'</div></div>'
+    +(d.itens&&d.itens.length>1
+      ? '<div style="margin-bottom:16px"><div class="sec-title">EPIs Entregues ('+d.itens.length+' itens)</div>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px">'
+        +'<thead><tr>'
+        +'<th style="background:#2D3277;color:#fff;padding:6px 8px;text-align:left;font-weight:700">Produto / EPI</th>'
+        +'<th style="background:#2D3277;color:#fff;padding:6px 8px;text-align:center">Tam.</th>'
+        +'<th style="background:#2D3277;color:#fff;padding:6px 8px;text-align:center">Qtd</th>'
+        +'<th style="background:#2D3277;color:#fff;padding:6px 8px;text-align:center">C.A.</th>'
+        +'<th style="background:#2D3277;color:#fff;padding:6px 8px;text-align:left">Motivo</th>'
+        +'</tr></thead><tbody>'
+        +d.itens.map(function(it,i){
+          var bg=i%2===0?'#fff':'#f4f6fb';
+          return '<tr style="background:'+bg+'">'
+            +'<td style="padding:6px 8px;font-weight:600">'+esc(it.descricao)+'</td>'
+            +'<td style="padding:6px 8px;text-align:center">'+(it.tam||'—')+'</td>'
+            +'<td style="padding:6px 8px;text-align:center;font-weight:700">'+it.qtd+' '+(it.unidade||'UN')+'</td>'
+            +'<td style="padding:6px 8px;text-align:center">'+(it.ca||'—')+'</td>'
+            +'<td style="padding:6px 8px">'+(it.motivo||'—')+'</td>'
+            +'</tr>'
+            +(it.obs?'<tr style="background:'+bg+'"><td colspan="5" style="padding:2px 8px 6px;font-size:10.5px;color:#5b6675"><i>Obs: '+esc(it.obs)+'</i></td></tr>':'');
+        }).join('')
+        +'</tbody></table>'
+        +'<div style="display:flex;gap:16px;margin-top:8px;font-size:11.5px;color:#5b6675">'
+        +'<div><b>Data:</b> '+fmtD(d.data)+'</div><div><b>Liberado por:</b> '+esc(d.lib)+'</div>'
+        +'</div></div>'
+      : '<div style="margin-bottom:16px"><div class="sec-title">Dados do EPI Entregue</div>'
+        +'<div class="grid2">'
+        +'<div class="cell full"><label>Produto / EPI</label><div class="v">'+p.descricao+'</div></div>'
+        +caCell
+        +tamCell
+        +(d.tipoModelo?'<div class="cell"><label>Tipo / Modelo</label><div class="v">'+esc(d.tipoModelo)+'</div></div>':'')
+        +'<div class="cell"><label>Quantidade</label><div class="v">'+d.qtd+' '+(p.unidade||'UN')+'</div></div>'
+        +'<div class="cell"><label>Data de Entrega</label><div class="v">'+fmtD(d.data)+'</div></div>'
+        +'<div class="cell"><label>Liberado por</label><div class="v">'+d.lib+'</div></div>'
+        +motivoCell
+        +obsCell
+        +'</div></div>'
+    )
     +(d.codigo?'<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;background:linear-gradient(135deg,#2D3277,#3a40a0);color:#fff;border-radius:8px;padding:14px 18px;margin-bottom:16px">'
       +'<div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;opacity:.8;font-weight:700;margin-bottom:3px">Código de Validação</div>'
       +'<div style="font-size:22px;font-weight:800;letter-spacing:.08em;font-family:\'Courier New\',monospace">'+d.codigo+'</div></div>'
