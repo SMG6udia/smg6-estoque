@@ -1979,105 +1979,189 @@ function abrirRelatorioVisual(){
   const r=(_repRange&&_repRange.start&&_repRange.end)?_repRange:repRange();
   const start=r.start,end=r.end;
   const {ent,sai,valEnt,qtdEnt,qtdSai}=aggregate(dom,start,end);
-  const porColab={};sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
   const busca=(state.repBusca||"").trim().toLowerCase();
-  let itens=prodOf(dom).map(p=>{const ip=itemPeriodo(p.id,start,end);return{nome:p.descricao,un:p.unidade||"UN",ca:dom==="safety"?caAtualProduto(p.id):"",ini:ip.ini,ent:ip.ent,sai:ip.sai,fim:ip.fim};});
-  if(state.repItem){const sp=PRODUTOS.find(x=>x.id===state.repItem);if(sp)itens=itens.filter(i=>i.nome===sp.descricao);}
-  if(busca)itens=itens.filter(i=>i.nome.toLowerCase().includes(busca));
-  itens=itens.filter(i=>i.ent||i.sai||i.fim).sort((a,b)=>b.sai-a.sai||a.nome.localeCompare(b.nome,"pt-BR"));
-  const maxBar=Math.max(1,...itens.map(i=>Math.max(i.ent,i.sai)));
   const periodoLbl=document.querySelector(".stat .l")?document.querySelector(".stat .l").textContent:"Período";
+  const now=new Date().toLocaleString("pt-BR");
 
-  const itemRows=itens.map(i=>{
-    const eW=Math.round(i.ent/maxBar*100),sW=Math.round(i.sai/maxBar*100);
-    return `<tr>
-      <td class="nm">${esc(i.nome)}${i.ca?`<span class="ca">CA ${esc(i.ca)}</span>`:""}</td>
-      <td class="n ini">${i.ini}</td>
-      <td class="n ent">+${i.ent}</td>
-      <td class="n sai">−${i.sai}</td>
-      <td class="n fim" style="${i.fim<=0?"color:#d23b30":""}">${i.fim}</td>
-      <td class="bars">
-        <div class="b"><span class="be" style="width:${i.ent?Math.max(eW,4):0}%"></span></div>
-        <div class="b"><span class="bs" style="width:${i.sai?Math.max(sW,4):0}%"></span></div>
-      </td>
-    </tr>`;
-  }).join("")||`<tr><td colspan="6" style="text-align:center;padding:30px;color:#888">Sem dados no período.</td></tr>`;
+  // Colaboradores que retiraram no período
+  const porColab={};
+  sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
 
-  const topColab=Object.entries(porColab).sort((a,b)=>b[1]-a[1]).slice(0,15);
-  const colabRows=dom==="safety"?(topColab.map(([k,q],i)=>`<tr><td>${i+1}°</td><td>${esc(k)}</td><td class="n">${q}</td></tr>`).join("")||`<tr><td colspan="3" style="text-align:center;padding:20px;color:#888">Sem retiradas.</td></tr>`):"";
+  // Lista de produtos filtrados
+  let prods=prodOf(dom);
+  if(state.repItem)prods=prods.filter(p=>p.id===state.repItem);
+  if(busca)prods=prods.filter(p=>p.descricao.toLowerCase().includes(busca));
+  prods=prods.slice().sort((a,b)=>a.descricao.localeCompare(b.descricao,"pt-BR"));
+
+  // Monta linhas da tabela principal
+  let tableRows="";
+  let gTotalEnt=0,gTotalSai=0,gTotalAtual=0;
+
+  prods.forEach(function(p){
+    const ca=dom==="safety"?caAtualProduto(p.id):"";
+    const caTag=ca?`<span class="ca-badge">CA ${esc(ca)}</span>`:"";
+    const hasTams=p.tamanhos&&p.tamanhos.length>0;
+
+    if(hasTams){
+      let pEnt=0,pSai=0,pIni=0;
+      const rowspan=p.tamanhos.length+1; // +1 para linha de total
+      const tamRows=p.tamanhos.map(function(tam,ti){
+        const entT=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="entrada"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+        const saiT=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="saida"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+        const salT=saldoVar(p.id,tam,"");
+        const iniT=salT-entT+saiT;
+        pEnt+=entT;pSai+=saiT;pIni+=iniT;
+        const isFirst=ti===0;
+        return `<tr class="${salT<=0?"row-zero":""}">`
+          +(isFirst?`<td rowspan="${rowspan}" class="nm-cell">${esc(p.descricao)}<br>${caTag}</td>`:"")
+          +`<td class="tam-cell">${esc(tam)}</td>`
+          +`<td class="n ini">${iniT}</td>`
+          +`<td class="n ent">${entT>0?"+"+entT:"—"}</td>`
+          +`<td class="n sai">${saiT>0?"−"+saiT:"—"}</td>`
+          +`<td class="n fim${salT<=0?" zero":""}">${salT}</td>`
+          +`</tr>`;
+      }).join("");
+      const totAtual=atual(p.id);
+      gTotalEnt+=pEnt;gTotalSai+=pSai;gTotalAtual+=totAtual;
+      tableRows+=tamRows
+        +`<tr class="tot-row">`
+        +`<td class="tam-tot">Total</td>`
+        +`<td class="n ini-t">${pIni}</td>`
+        +`<td class="n ent-t">${pEnt>0?"+"+pEnt:"—"}</td>`
+        +`<td class="n sai-t">${pSai>0?"−"+pSai:"—"}</td>`
+        +`<td class="n fim-t${totAtual<=0?" zero":""}">${totAtual}</td>`
+        +`</tr>`;
+    }else{
+      const ip=itemPeriodo(p.id,start,end);
+      const salAtual=atual(p.id);
+      gTotalEnt+=ip.ent;gTotalSai+=ip.sai;gTotalAtual+=salAtual;
+      tableRows+=`<tr class="${salAtual<=0?"row-zero":""}">`
+        +`<td class="nm-cell">${esc(p.descricao)}<br>${caTag}</td>`
+        +`<td class="tam-cell" style="color:#b0b8c8">—</td>`
+        +`<td class="n ini">${ip.ini}</td>`
+        +`<td class="n ent">${ip.ent>0?"+"+ip.ent:"—"}</td>`
+        +`<td class="n sai">${ip.sai>0?"−"+ip.sai:"—"}</td>`
+        +`<td class="n fim${salAtual<=0?" zero":""}">${salAtual}</td>`
+        +`</tr>`;
+    }
+  });
+
+  if(!tableRows)tableRows=`<tr><td colspan="6" style="text-align:center;padding:28px;color:#888">Nenhum item encontrado para o período.</td></tr>`;
 
   // Alertas de estoque mínimo
   const alertasPDF=itensAbaixoMin(dom);
-  const alertRowsPDF=alertasPDF.map(a=>`<tr style="background:${a.saldo<=0?"#fbe5e3":"#fff8ee"}"><td class="nm">${a.saldo<=0?"&#9888; ":""}${esc(a.p.descricao)}</td><td class="n">${a.min}</td><td class="n" style="color:${a.saldo<=0?"#d23b30":"#b8860b"};font-weight:800">${a.saldo}</td><td style="color:${a.saldo<=0?"#d23b30":"#b8860b"};font-size:11.5px">${a.saldo<=0?"Repor com urgência":"Programar reposição"}</td></tr>`).join("");
-  const alertSectionPDF=alertasPDF.length?`<h2>&#9888; Alertas de Estoque Mínimo (${alertasPDF.length})</h2>
-    <table><thead><tr><th>Produto / EPI</th><th class="n">Mínimo</th><th class="n">Saldo atual</th><th>Status</th></tr></thead><tbody>${alertRowsPDF}</tbody></table>`:"";
-
-  // Previsão de compra no PDF
-  const comprasPDF=previsaoCompra(dom,30).filter(c=>c.necessidade>0).sort((a,b)=>b.necessidade-a.necessidade);
-  const compraRowsPDF=comprasPDF.map(c=>`<tr><td class="nm">${esc(c.p.descricao)}</td><td class="n">${c.ca||"—"}</td><td class="n">${c.saldo}</td><td class="n">${c.cmd.toFixed(1)}/dia</td><td class="n" style="font-weight:800;color:#2D3277">${c.necessidade}</td><td class="n">${c.custo>0?brl(c.necessidade*c.custo):"—"}</td></tr>`).join("");
-  const custoComprasPDF=comprasPDF.reduce((s,c)=>s+c.necessidade*c.custo,0);
-  const compraSectionPDF=comprasPDF.length?`<h2>&#128722; Previsão de Compra — próximos 30 dias</h2>
-    <p style="font-size:11px;color:#5b6675;margin:-4px 0 8px">Baseado no consumo médio dos últimos 90 dias e no estoque mínimo configurado.${custoComprasPDF>0?" Investimento estimado: <b>"+brl(custoComprasPDF)+"</b>.":""}</p>
-    <table><thead><tr><th>Produto / EPI</th><th class="n">C.A.</th><th class="n">Saldo</th><th class="n">Consumo</th><th class="n">Qtd sugerida</th><th class="n">Custo est.</th></tr></thead><tbody>${compraRowsPDF}</tbody></table>`:"";
+  const alertRowsPDF=alertasPDF.map(a=>`<tr style="background:${a.saldo<=0?"#fbe5e3":"#fff8ee"}">`
+    +`<td class="nm-cell">${a.saldo<=0?"⚠ ":""}${esc(a.p.descricao)}</td>`
+    +`<td class="n">${a.min}</td>`
+    +`<td class="n" style="color:${a.saldo<=0?"#d23b30":"#b8860b"};font-weight:800">${a.saldo}</td>`
+    +`<td style="color:${a.saldo<=0?"#d23b30":"#b8860b"};font-size:11px">${a.saldo<=0?"Repor com urgência":"Programar reposição"}</td>`
+    +`</tr>`).join("");
+  const alertSectionPDF=alertasPDF.length
+    ?`<h2>⚠ Alertas de Estoque Mínimo (${alertasPDF.length})</h2>
+      <table><thead><tr><th>Produto / EPI</th><th class="n">Mínimo</th><th class="n">Saldo atual</th><th>Status</th></tr></thead>
+      <tbody>${alertRowsPDF}</tbody></table>`:"";
 
   var _mk=document.querySelector(".logo .mark");
-  const logoTag=(_mk&&_mk.src)?`<img src="${_mk.src}" style="height:46px">`:`<div style="font-family:Arial;font-weight:800;font-size:20px;color:#2D3277">SMG6 · Estoque</div>`;
-  const now=new Date().toLocaleString("pt-BR");
+  const logoTag=(_mk&&_mk.src)?`<img src="${_mk.src}" style="height:44px">`:`<div style="font-family:Arial;font-weight:800;font-size:18px;color:#2D3277">SMG6 · Estoque</div>`;
 
-  const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de Estoque — ${esc(periodoLbl)}</title>
+  const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+  <title>Relatório de Estoque — ${esc(periodoLbl)}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:"Segoe UI",Arial,sans-serif;color:#1d2733;padding:34px 40px;background:#fff}
-    .head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #FFE600;padding-bottom:16px;margin-bottom:8px}
-    .head .meta{text-align:right;font-size:11px;color:#5b6675;line-height:1.6}
-    h1{font-size:21px;color:#2D3277;margin:18px 0 3px}
-    .sub{font-size:13px;color:#5b6675;margin-bottom:18px}
-    .kpis{display:flex;gap:12px;margin-bottom:22px}
-    .kpi{flex:1;border:1px solid #d3dae4;border-radius:9px;padding:13px 15px;border-left:4px solid #2D3277}
-    .kpi.g{border-left-color:#1f9d55}.kpi.r{border-left-color:#d23b30}.kpi.a{border-left-color:#b8860b}
-    .kpi .l{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b94a3;font-weight:700}
-    .kpi .v{font-size:25px;font-weight:800;margin-top:3px}
-    .kpi .m{font-size:11px;color:#5b6675;margin-top:2px}
-    h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#5b6675;margin:24px 0 9px;padding-bottom:6px;border-bottom:1px solid #e6ebf1}
-    table{width:100%;border-collapse:collapse;font-size:12.5px}
-    th{text-align:left;background:#f6f8fb;padding:8px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#5b6675;border-bottom:1px solid #d3dae4}
-    td{padding:8px 10px;border-bottom:1px solid #eef1f6;vertical-align:middle}
-    td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
-    td.nm{font-weight:600}
-    td.nm .ca{display:inline-block;font-size:9.5px;font-weight:700;color:#2D3277;background:#e8e9f5;padding:1px 6px;border-radius:8px;margin-left:7px}
-    td.ent{color:#1f9d55}td.sai{color:#d23b30}td.ini{color:#8b94a3}td.fim{color:#2D3277;font-weight:800}
-    td.bars{width:160px}
-    .b{height:7px;background:#eef1f6;border-radius:4px;margin:3px 0;overflow:hidden}
-    .be{display:block;height:100%;background:#27b863}.bs{display:block;height:100%;background:#e8554a}
-    .foot{margin-top:30px;padding-top:14px;border-top:1px solid #e6ebf1;font-size:10.5px;color:#8b94a3;display:flex;justify-content:space-between}
-    .noprint{margin:22px 0;text-align:center}
-    .btn{background:#2D3277;color:#fff;border:none;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin:0 5px}
-    .btn.sec{background:#fff;color:#2D3277;border:1px solid #2D3277}
-    @media print{.noprint{display:none}body{padding:0}}
+    body{font-family:"Segoe UI",Arial,sans-serif;color:#1d2733;padding:28px 36px;background:#fff;font-size:12.5px}
+    .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #FFE600;padding-bottom:13px;margin-bottom:14px}
+    .head .meta{text-align:right;font-size:10.5px;color:#5b6675;line-height:1.7}
+    h1{font-size:18px;color:#2D3277;margin:0 0 2px;font-weight:800}
+    .sub{font-size:11.5px;color:#5b6675;margin-bottom:14px}
+    .kpis{display:flex;gap:9px;margin-bottom:18px;flex-wrap:wrap}
+    .kpi{flex:1;min-width:120px;border:1px solid #d3dae4;border-radius:8px;padding:10px 13px;border-left:4px solid #2D3277}
+    .kpi.g{border-left-color:#1f9d55}.kpi.r{border-left-color:#d23b30}.kpi.a{border-left-color:#b8860b}.kpi.b{border-left-color:#2D3277}
+    .kpi .l{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#8b94a3;font-weight:700}
+    .kpi .v{font-size:22px;font-weight:800;margin-top:2px;color:#1d2733}
+    .kpi .m{font-size:10px;color:#5b6675;margin-top:1px}
+    h2{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:#5b6675;margin:18px 0 7px;padding-bottom:5px;border-bottom:2px solid #e6ebf1;font-weight:700}
+    table{width:100%;border-collapse:collapse;font-size:11.5px}
+    th{text-align:left;background:#2D3277;color:#fff;padding:7px 10px;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+    th.n{text-align:right}
+    td{padding:5px 10px;border-bottom:1px solid #eef1f6;vertical-align:middle}
+    td.n{text-align:right;font-variant-numeric:tabular-nums}
+    td.nm-cell{font-weight:600;min-width:160px}
+    .ca-badge{display:inline-block;font-size:9px;font-weight:700;color:#2D3277;background:#e8e9f5;padding:1px 5px;border-radius:5px;margin-top:2px}
+    td.tam-cell{text-align:center;font-size:11px;color:#5b6675;font-weight:600}
+    td.ini{color:#8b94a3}
+    td.ent{color:#1f9d55;font-weight:700}
+    td.sai{color:#d23b30;font-weight:700}
+    td.fim{color:#2D3277;font-weight:800;font-size:13px}
+    td.fim.zero,td.fim-t.zero{color:#d23b30!important}
+    tr.row-zero td{background:#fef9f9}
+    tr:nth-child(even):not(.tot-row):not(.grand-tot){background:#fafbfd}
+    tr.tot-row td{background:#eef1fa;font-weight:700;border-top:1.5px solid #b8bedd;border-bottom:2px solid #b8bedd}
+    td.tam-tot{text-align:center;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:#2D3277;font-weight:800}
+    td.ent-t{color:#1f9d55;font-weight:800}
+    td.sai-t{color:#d23b30;font-weight:800}
+    td.fim-t{color:#2D3277;font-weight:800;font-size:13px}
+    tr.grand-tot td{background:#2D3277!important;color:#fff!important;font-weight:800;font-size:12.5px;border:none;padding:8px 10px}
+    tr.grand-tot td.n{text-align:right}
+    .foot{margin-top:22px;padding-top:10px;border-top:1px solid #e6ebf1;font-size:10px;color:#8b94a3;display:flex;justify-content:space-between}
+    .noprint{margin:18px 0;text-align:center}
+    .btn{background:#2D3277;color:#fff;border:none;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;margin:0 5px}
+    .btn.sec{background:#fff;color:#2D3277;border:1.5px solid #2D3277}
+    @media print{
+      .noprint{display:none}
+      body{padding:0}
+      h2{page-break-after:avoid}
+      tr{page-break-inside:avoid}
+      thead{display:table-header-group}
+    }
   </style></head><body>
-    <div class="head">${logoTag}<div class="meta"><b>Relatório de ${dom==="safety"?"EPIs (Safety)":"Insumos"}</b><br>Gerado em ${now}<br>${fmtD(start)} a ${fmtD(end)}</div></div>
-    <h1>Relatório de Movimentação de Estoque</h1>
-    <div class="sub">${esc(periodoLbl)} · ${dom==="safety"?"Equipamentos de Proteção Individual":"Insumos"}</div>
+    <div class="head">
+      ${logoTag}
+      <div class="meta">
+        <b>Relatório de Estoque — ${dom==="safety"?"EPI / Safety":"Insumos"}</b><br>
+        Período: <b>${fmtD(start)}</b> a <b>${fmtD(end)}</b><br>
+        Gerado em ${now}
+      </div>
+    </div>
+    <h1>Controle de Estoque — ${dom==="safety"?"Equipamentos de Proteção Individual":"Insumos"}</h1>
+    <div class="sub">${esc(periodoLbl)}</div>
     <div class="kpis">
-      <div class="kpi g"><div class="l">Entradas</div><div class="v">${qtdEnt}</div><div class="m">${ent.length} lançamento(s) · ${brl(valEnt)}</div></div>
-      <div class="kpi r"><div class="l">Saídas</div><div class="v">${qtdSai}</div><div class="m">${sai.length} registro(s)</div></div>
-      <div class="kpi a"><div class="l">Colaboradores</div><div class="v">${Object.keys(porColab).length}</div><div class="m">atendidos</div></div>
-      <div class="kpi"><div class="l">Itens movimentados</div><div class="v">${itens.length}</div><div class="m">no período</div></div>
+      <div class="kpi g"><div class="l">Entradas no período</div><div class="v">${qtdEnt}</div><div class="m">${ent.length} lançamento(s) · ${brl(valEnt)}</div></div>
+      <div class="kpi r"><div class="l">Saídas no período</div><div class="v">${qtdSai}</div><div class="m">${sai.length} registro(s)</div></div>
+      <div class="kpi b"><div class="l">Saldo atual total</div><div class="v">${gTotalAtual}</div><div class="m">todos os itens</div></div>
+      <div class="kpi a"><div class="l">Colaboradores atendidos</div><div class="v">${Object.keys(porColab).length}</div><div class="m">no período</div></div>
     </div>
     ${alertSectionPDF}
-    ${compraSectionPDF}
-    <h2>Entradas, Saídas e Saldo por Item</h2>
+    <h2>Estoque por Item e Tamanho — ${esc(periodoLbl)}</h2>
     <table>
-      <thead><tr><th>Produto / EPI</th><th class="n">Inicial</th><th class="n">Entrou</th><th class="n">Saiu</th><th class="n">Saldo</th><th>Comparativo</th></tr></thead>
-      <tbody>${itemRows}</tbody>
+      <thead>
+        <tr>
+          <th style="min-width:160px">Produto / EPI</th>
+          <th style="text-align:center;width:64px">Tamanho</th>
+          <th class="n" style="width:72px">Est. Inicial</th>
+          <th class="n" style="width:72px">Entradas</th>
+          <th class="n" style="width:72px">Saídas</th>
+          <th class="n" style="width:84px">Saldo Atual</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows}
+        <tr class="grand-tot">
+          <td colspan="2">TOTAL GERAL</td>
+          <td class="n">—</td>
+          <td class="n">+${gTotalEnt}</td>
+          <td class="n">−${gTotalSai}</td>
+          <td class="n">${gTotalAtual}</td>
+        </tr>
+      </tbody>
     </table>
-    ${dom==="safety"?`<h2>Colaboradores que mais retiraram</h2>
-    <table><thead><tr><th style="width:50px">#</th><th>Colaborador</th><th class="n">Itens retirados</th></tr></thead><tbody>${colabRows}</tbody></table>`:""}
     <div class="noprint">
-      <button class="btn" onclick="window.print()">&#128424; Imprimir / Salvar PDF</button>
+      <button class="btn" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
       <button class="btn sec" onclick="window.close()">Fechar</button>
     </div>
-    <div class="foot"><span>Controle de Estoque SMG6 — Mercado Livre</span><span>Documento gerado automaticamente pelo sistema</span></div>
+    <div class="foot">
+      <span>Controle de Estoque SMG6 — Mercado Livre</span>
+      <span>Documento gerado automaticamente pelo sistema</span>
+    </div>
   </body></html>`;
 
   const blob=new Blob([html],{type:"text/html;charset=utf-8"});
