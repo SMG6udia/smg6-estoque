@@ -2433,71 +2433,6 @@ function _wz_step1(prods,prefColab){
     {label:"Pr&oacute;ximo: CPF \u2192",cls:"primary",act:_wz_validarDados}
   ]);
 
-/* ── Lista de itens do wizard (renderiza dentro do modal aberto) ── */
-function _wz_renderListaItens(){
-  var cont=document.getElementById("ew_lista_itens");
-  if(!cont)return;
-  if(!EPI_WZ.itens||!EPI_WZ.itens.length){
-    cont.innerHTML='<span style="color:var(--txt-faint);font-size:12px">Nenhum EPI adicionado ainda. Use o formulário abaixo.</span>';
-    return;
-  }
-  var html='';
-  EPI_WZ.itens.forEach(function(it,idx){
-    var tam=it.tam?'<span class="chip tam" style="margin-left:4px">'+esc(it.tam)+'</span>':'';
-    var tipo=it.tipoModelo?'<span class="chip" style="margin-left:4px">'+esc(it.tipoModelo)+'</span>':'';
-    var mot=it.motivo?'<span style="color:var(--txt-faint);font-size:10.5px;margin-left:6px">'+esc(it.motivo)+'</span>':'';
-    html+='<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid var(--line-soft)">'
-      +'<span style="flex:1;font-size:12.5px"><b>'+esc(it.descricao)+'</b>'+tam+tipo
-      +' <span style="color:var(--txt-dim);font-weight:700">×'+it.qtd+'</span>'+mot+'</span>'
-      +'<button type="button" class="btn ghost sm" style="font-size:11px;padding:2px 7px;color:var(--red);min-width:0" onclick="_wz_removerItem('+idx+')">✕</button>'
-      +'</div>';
-  });
-  cont.innerHTML=html;
-}
-
-function _wz_adicionarItem(){
-  var prod=((document.getElementById("ew_prod")||{}).value)||"";
-  var qtd=Number(((document.getElementById("ew_qtd")||{}).value)||0);
-  var tam=((document.getElementById("ew_tam")||{}).value)||"";
-  var obs=((document.getElementById("ew_obs")||{}).value)||"";
-  var motivo=((document.getElementById("ew_motivo")||{}).value)||"";
-  var tipoModelo=((document.getElementById("ew_tipo")||{}).value)||"";
-  var p=PRODUTOS.find(function(x){return x.id===prod;});
-  if(!prod){toast("Selecione um EPI","erro");return;}
-  if(!qtd||qtd<=0){toast("Informe a quantidade","erro");return;}
-  if(!motivo){toast("Selecione o motivo","erro");return;}
-  if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
-  // Calcula qtd já na lista para esse produto+tamanho
-  var qtdNaLista=EPI_WZ.itens.filter(function(it){return it.prod===prod&&it.tam===tam;}).reduce(function(s,it){return s+it.qtd;},0);
-  var saldo=tam?saldoVar(prod,tam,""):atual(prod);
-  if(qtdNaLista+qtd>saldo){toast("Estoque insuficiente"+(tam?" (tam. "+tam+")":"")+". Disponível: "+saldo+" · Na lista: "+qtdNaLista+".","erro");return;}
-  // Agrupa com item igual se existir
-  var existente=EPI_WZ.itens.find(function(it){return it.prod===prod&&it.tam===tam&&it.tipoModelo===tipoModelo&&it.motivo===motivo;});
-  if(existente){
-    existente.qtd+=qtd;
-    if(obs)existente.obs=(existente.obs?existente.obs+" / ":"")+obs;
-  }else{
-    EPI_WZ.itens.push({prod:prod,descricao:p?p.descricao:prod,tam:tam,qtd:qtd,obs:obs,motivo:motivo,tipoModelo:tipoModelo});
-  }
-  // Limpa campos de produto para facilitar próxima adição
-  var ps=document.getElementById("ew_prod"),ts=document.getElementById("ew_tam"),
-      ms=document.getElementById("ew_motivo"),qs=document.getElementById("ew_qtd"),
-      os=document.getElementById("ew_obs"),disp=document.getElementById("ew_disp");
-  if(ps)ps.value="";
-  if(ts)ts.innerHTML='<option value="">&#8212;</option>';
-  if(ms)ms.value="";
-  if(qs)qs.value="1";
-  if(os)os.value="";
-  if(disp)disp.value="—";
-  var tw=document.getElementById("ew_tipo_wrap");if(tw)tw.style.display="none";
-  _wz_renderListaItens();
-  toast((p?p.descricao:prod)+" adicionado à lista","ok");
-}
-
-function _wz_removerItem(idx){
-  EPI_WZ.itens.splice(idx,1);
-  _wz_renderListaItens();
-}
 
   setTimeout(function(){
     var ps=document.getElementById("ew_prod"),
@@ -2566,6 +2501,73 @@ function _wz_removerItem(idx){
     if(ps&&ps.value) fill(); else upd();
   },0);
 }
+
+/* ── Lista de itens do wizard (renderiza dentro do modal aberto) ── */
+function _wz_renderListaItens(){
+  var cont=document.getElementById("ew_lista_itens");
+  if(!cont)return;
+  if(!EPI_WZ.itens||!EPI_WZ.itens.length){
+    cont.innerHTML='<span style="color:var(--txt-faint);font-size:12px">Nenhum EPI adicionado ainda. Use o formulário abaixo.</span>';
+    return;
+  }
+  var html='';
+  EPI_WZ.itens.forEach(function(it,idx){
+    var tam=it.tam?'<span class="chip tam" style="margin-left:4px">'+esc(it.tam)+'</span>':'';
+    var tipo=it.tipoModelo?'<span class="chip" style="margin-left:4px">'+esc(it.tipoModelo)+'</span>':'';
+    var mot=it.motivo?'<span style="color:var(--txt-faint);font-size:10.5px;margin-left:6px">'+esc(it.motivo)+'</span>':'';
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid var(--line-soft)">'
+      +'<span style="flex:1;font-size:12.5px"><b>'+esc(it.descricao)+'</b>'+tam+tipo
+      +' <span style="color:var(--txt-dim);font-weight:700">×'+it.qtd+'</span>'+mot+'</span>'
+      +'<button type="button" class="btn ghost sm" style="font-size:11px;padding:2px 7px;color:var(--red);min-width:0" onclick="_wz_removerItem('+idx+')">✕</button>'
+      +'</div>';
+  });
+  cont.innerHTML=html;
+}
+
+function _wz_adicionarItem(){
+  var prod=((document.getElementById("ew_prod")||{}).value)||"";
+  var qtd=Number(((document.getElementById("ew_qtd")||{}).value)||0);
+  var tam=((document.getElementById("ew_tam")||{}).value)||"";
+  var obs=((document.getElementById("ew_obs")||{}).value)||"";
+  var motivo=((document.getElementById("ew_motivo")||{}).value)||"";
+  var tipoModelo=((document.getElementById("ew_tipo")||{}).value)||"";
+  var p=PRODUTOS.find(function(x){return x.id===prod;});
+  if(!prod){toast("Selecione um EPI","erro");return;}
+  if(!qtd||qtd<=0){toast("Informe a quantidade","erro");return;}
+  if(!motivo){toast("Selecione o motivo","erro");return;}
+  if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
+  // Calcula qtd já na lista para esse produto+tamanho
+  var qtdNaLista=EPI_WZ.itens.filter(function(it){return it.prod===prod&&it.tam===tam;}).reduce(function(s,it){return s+it.qtd;},0);
+  var saldo=tam?saldoVar(prod,tam,""):atual(prod);
+  if(qtdNaLista+qtd>saldo){toast("Estoque insuficiente"+(tam?" (tam. "+tam+")":"")+". Disponível: "+saldo+" · Na lista: "+qtdNaLista+".","erro");return;}
+  // Agrupa com item igual se existir
+  var existente=EPI_WZ.itens.find(function(it){return it.prod===prod&&it.tam===tam&&it.tipoModelo===tipoModelo&&it.motivo===motivo;});
+  if(existente){
+    existente.qtd+=qtd;
+    if(obs)existente.obs=(existente.obs?existente.obs+" / ":"")+obs;
+  }else{
+    EPI_WZ.itens.push({prod:prod,descricao:p?p.descricao:prod,tam:tam,qtd:qtd,obs:obs,motivo:motivo,tipoModelo:tipoModelo});
+  }
+  // Limpa campos de produto para facilitar próxima adição
+  var ps=document.getElementById("ew_prod"),ts=document.getElementById("ew_tam"),
+      ms=document.getElementById("ew_motivo"),qs=document.getElementById("ew_qtd"),
+      os=document.getElementById("ew_obs"),disp=document.getElementById("ew_disp");
+  if(ps)ps.value="";
+  if(ts)ts.innerHTML='<option value="">&#8212;</option>';
+  if(ms)ms.value="";
+  if(qs)qs.value="1";
+  if(os)os.value="";
+  if(disp)disp.value="—";
+  var tw=document.getElementById("ew_tipo_wrap");if(tw)tw.style.display="none";
+  _wz_renderListaItens();
+  toast((p?p.descricao:prod)+" adicionado à lista","ok");
+}
+
+function _wz_removerItem(idx){
+  EPI_WZ.itens.splice(idx,1);
+  _wz_renderListaItens();
+}
+
 
 function _wz_validarDados(){
   var colab=(document.getElementById("ew_colab")||{}).value||"";
