@@ -487,7 +487,7 @@ const prodOf=dom=>PRODUTOS.filter(p=>p.dom===dom);
 const movOf=pid=>MOVS.filter(m=>m.produtoId===pid);
 function selProd(){return PRODUTOS.find(p=>p.id===state.sel)||null;}
 function atual(pid){return movOf(pid).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
-function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>(m.tamanho||"")===(tam||"")&&(cor===""||((m.cor||"")===(cor||"")))).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
+function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>String(m.tamanho||"").trim()===String(tam||"").trim()&&(cor===""||((m.cor||"")===(cor||"")))).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
 function custoUnit(pid){const e=movOf(pid).filter(m=>m.tipo==="entrada"&&m.custoUnit>0);return e.length?e[e.length-1].custoUnit:0;}
 function caAtualProduto(pid){
   if(!pid)return"";
@@ -502,6 +502,15 @@ function caAtualProduto(pid){
   return (p&&p.ca)||"";
 }
 function corDot(c){if(!c)return"";return`<span class="cdot" style="background:${COR_HEX[c]||"#bbb"}"></span>`;}
+function mascaraTelefone(v){
+  v=String(v||"").replace(/\D/g,"");
+  if(v.length>11)v=v.slice(0,11);
+  if(v.length>10) return"("+v.slice(0,2)+") "+v.slice(2,7)+"-"+v.slice(7);
+  if(v.length>6)  return"("+v.slice(0,2)+") "+v.slice(2,6)+"-"+v.slice(6);
+  if(v.length>2)  return"("+v.slice(0,2)+") "+v.slice(2);
+  if(v.length>0)  return"("+v;
+  return"";
+}
 function colabListaAtivos(dom){
   const fromSheets=COLABORADORES.filter(c=>c.ativo!==false).map(c=>c.nome);
   const fromMovs=[...new Set(MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom).map(m=>m.parte))].filter(Boolean);
@@ -754,7 +763,7 @@ function _uForm(u){
     +'<div class="mfield full"><label>E-mail @mercadolivre.com <span class="req">*</span></label>'
     +'<input id="uf_email" type="email" value="'+(u?esc(u.email):"")+'"></div>'
     +'<div class="mfield"><label>Contato / Telefone</label>'
-    +'<input id="uf_contato" value="'+(u?esc(u.contato||""):"")+'"></div>'
+    +'<input id="uf_contato" placeholder="(XX) XXXXX-XXXX" maxlength="15" oninput="this.value=mascaraTelefone(this.value)" value="'+(u?esc(u.contato||""):"")+'"></div>'
     +'<div class="mfield"><label>Usuário (login)</label><input id="uf_usuario" value="'+(u?esc(u.usuario||"")+"":"")+'" placeholder="Ex: joao.silva"></div>'
     +'<div class="mfield"><label>Nível de Acesso <span class="req">*</span></label>'
     +'<select id="uf_nivel">'+niveis.map(function(n){return'<option value="'+n+'"'+(u&&u.nivel===n?" selected":"")+'>'+n+'</option>';}).join("")+'</select></div>'
@@ -1229,7 +1238,7 @@ function formCadastroColab(colab){
     +'<div class="mfield full"><label>Nome Completo <span class="req">*</span></label>'
     +'<input id="cc_nome" value="'+(c.nome||"")+'"></div>'
     +'<div class="mfield"><label>Contato / Telefone</label>'
-    +'<input id="cc_contato" value="'+(c.contato||"")+'"></div>'
+    +'<input id="cc_contato" placeholder="(XX) XXXXX-XXXX" maxlength="15" oninput="this.value=mascaraTelefone(this.value)" value="'+(c.contato||"")+'"></div>'
     +'<div class="mfield"><label>CPF <span class="req">*</span></label>'
     +'<input id="cc_cpf" type="text" inputmode="numeric" maxlength="14" value="'+(c.cpf||"")+'" placeholder="000.000.000-00"></div>'
     +'<div class="mfield"><label>Status</label>'
@@ -1700,8 +1709,8 @@ function dualLineChartSVG(pts){
 function buildTamBarChart(prodId,tamanhos,start,end){
   if(!tamanhos||!tamanhos.length)return "";
   const rows=tamanhos.map(function(tam){
-    const ent=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="entrada"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
-    const sai=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="saida"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+    const ent=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="entrada"&&String(m.tamanho||"").trim()===String(tam||"").trim()&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+    const sai=MOVS.filter(m=>m.produtoId===prodId&&m.tipo==="saida"&&String(m.tamanho||"").trim()===String(tam||"").trim()&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
     const sal=saldoVar(prodId,tam,"");
     const maxV=Math.max(ent,sai,sal,1);
     const barW=180;
@@ -2037,8 +2046,8 @@ function abrirRelatorioVisual(){
       const hasSemTam=semTamSaldo>0||semTamEnt>0||semTamSai>0;
       const rowspan=p.tamanhos.length+(hasSemTam?1:0)+1; // +sem-tam row +total row
       const tamRows=p.tamanhos.map(function(tam,ti){
-        const entT=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="entrada"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
-        const saiT=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="saida"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+        const entT=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="entrada"&&String(m.tamanho||"").trim()===String(tam||"").trim()&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+        const saiT=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="saida"&&String(m.tamanho||"").trim()===String(tam||"").trim()&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
         const salT=saldoVar(p.id,tam,"");
         const iniT=salT-entT+saiT;
         pEnt+=entT;pSai+=saiT;pIni+=iniT;
