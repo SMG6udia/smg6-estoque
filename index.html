@@ -520,7 +520,7 @@ function colabUnidadeOf(nome){
 function colabTurnoOf(nome){
   const c=COLABORADORES.find(function(x){return x.nome===nome;});
   if(c&&c.turno)return c.turno;
-  return "PM"; // padrão histórico
+  return "AM"; // padrão histórico
 }
 function colabListaAtivos(dom,unidade,turno){
   const fromSheets=COLABORADORES.filter(c=>c.ativo!==false).map(c=>c.nome);
@@ -1264,6 +1264,7 @@ function viewDesligados(){
 function formCadastroColab(colab){
   var isNew=!colab;
   var c=colab||{};
+  var curUnidade=c.unidade||"SMG6";
   var body='<div class="mgrid">'
     +'<div class="mfield full"><label>Nome Completo <span class="req">*</span></label>'
     +'<input id="cc_nome" value="'+(c.nome||"")+'"></div>'
@@ -1279,8 +1280,8 @@ function formCadastroColab(colab){
     +'<div class="mfield" id="cc_turno_wrap" style="display:'+(curUnidade==="SMG6"?"":"none")+'">'
     +'<label>Turno</label>'
     +'<select id="cc_turno">'
-    +'<option value="AM" '+((c.turno==="AM")?"selected":"")+'>AM</option>'
-    +'<option value="PM" '+((!c.turno||c.turno==="PM")?"selected":"")+'>PM</option>'
+    +'<option value="AM" '+((! c.turno||c.turno==="AM")?"selected":"")+'>AM</option>'
+    +'<option value="PM" '+((c.turno==="PM")?"selected":"")+'>PM</option>'
     +'</select></div>'
     +'<div class="mfield"><label>Status</label>'
     +'<select id="cc_ativo"><option value="true" '+(c.ativo!==false?"selected":"")+'>Ativo</option>'
