@@ -511,12 +511,26 @@ function mascaraTelefone(v){
   if(v.length>0)  return"("+v;
   return"";
 }
-function colabListaAtivos(dom){
+function colabUnidadeOf(nome){
+  const c=COLABORADORES.find(function(x){return x.nome===nome;});
+  if(c&&c.unidade)return c.unidade;
+  // colaboradores sem unidade cadastrada = SMG6 (padrão histórico)
+  return "SMG6";
+}
+function colabTurnoOf(nome){
+  const c=COLABORADORES.find(function(x){return x.nome===nome;});
+  if(c&&c.turno)return c.turno;
+  return "PM"; // padrão histórico
+}
+function colabListaAtivos(dom,unidade,turno){
   const fromSheets=COLABORADORES.filter(c=>c.ativo!==false).map(c=>c.nome);
   const fromMovs=[...new Set(MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom).map(m=>m.parte))].filter(Boolean);
   const fromPlanilha=dom==="safety"?COLAB_PLANILHA_ATIVOS:[];
   const base=fromSheets.length>0?fromSheets:[...new Set([...fromPlanilha,...fromMovs])];
-  return [...new Set(base)].filter(n=>!DESLIGADOS.includes(n)).sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  let lista=[...new Set(base)].filter(n=>!DESLIGADOS.includes(n));
+  if(unidade){lista=lista.filter(function(n){return colabUnidadeOf(n)===unidade;});}
+  if(unidade==="SMG6"&&turno){lista=lista.filter(function(n){return colabTurnoOf(n)===turno;});}
+  return lista.sort((a,b)=>a.localeCompare(b,"pt-BR"));
 }
 function mesLabel(ym){const[y,m]=ym.split("-");return MESES[Number(m)-1]+"/"+y;}
 function monthRange(ym){const[y,m]=ym.split("-").map(Number);const last=new Date(y,m,0).getDate();return{start:`${ym}-01`,end:`${ym}-${String(last).padStart(2,"0")}`};}
@@ -545,7 +559,7 @@ function itensAbaixoMin(dom){return prodOf(dom).map(p=>({p:p,saldo:atual(p.id),m
 
 /* ================= STATE ================= */
 let PRODUTOS=[],MOVS=[],DESLIGADOS=[],COLABORADORES=[];
-let state={dom:"safety",view:"estoque",sel:null,colab:null,histColab:null,rep:"semana",repWeek:null,repMonth:"",repYear:0,repStart:"",repEnd:"",repItem:"",repBusca:""};
+let state={dom:"safety",view:"estoque",sel:null,colab:null,histColab:null,rep:"semana",repWeek:null,repMonth:"",repYear:0,repStart:"",repEnd:"",repItem:"",repBusca:"",colabUnidade:"SMG6",colabTurno:"PM",repUnidade:"geral"};
 let _repRange={start:"",end:""};
 
 /* ================= STORAGE (Google Sheets) ================= */
@@ -757,6 +771,7 @@ function _uEditar(email){
 function _uForm(u){
   var isNew=!u;
   var niveis=["admin","operador","visualizador"];
+  var curUnidade=c.unidade||"SMG6";
   var body='<div class="mgrid">'
     +'<div class="mfield full"><label>Nome Completo <span class="req">*</span></label>'
     +'<input id="uf_nome" value="'+(u?esc(u.nome||""):"")+'"></div>'
@@ -1118,6 +1133,7 @@ function viewColabList(){
   const busca=(state.colabBusca||"").trim().toLowerCase();
   const filtrados=busca?ativos.filter(n=>n.toLowerCase().includes(busca)):ativos;
   const selectHtml=`<div class="colab-select-wrap">
+    ${unidadeTabs}
     <label style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600">Buscar colaborador</label>
     <input id="colabBusca" type="text" placeholder="Digite o nome…" value="${esc(state.colabBusca||"")}" autocomplete="off"
       style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box">
@@ -1241,6 +1257,17 @@ function formCadastroColab(colab){
     +'<input id="cc_contato" placeholder="(XX) XXXXX-XXXX" maxlength="15" oninput="this.value=mascaraTelefone(this.value)" value="'+(c.contato||"")+'"></div>'
     +'<div class="mfield"><label>CPF <span class="req">*</span></label>'
     +'<input id="cc_cpf" type="text" inputmode="numeric" maxlength="14" value="'+(c.cpf||"")+'" placeholder="000.000.000-00"></div>'
+    +'<div class="mfield"><label>Unidade <span class="req">*</span></label>'
+    +'<select id="cc_unidade" onchange="(function(){var u=document.getElementById(\'cc_unidade\').value;var tw=document.getElementById(\'cc_turno_wrap\');if(tw)tw.style.display=u===\'SMG6\'?\'\':\'none\';})()">'
+    +'<option value="SMG6" '+((curUnidade==="SMG6")?"selected":"")+'>SMG6</option>'
+    +'<option value="XMG2" '+((curUnidade==="XMG2")?"selected":"")+'>XMG2</option>'
+    +'</select></div>'
+    +'<div class="mfield" id="cc_turno_wrap" style="display:'+(curUnidade==="SMG6"?"":"none")+'">'
+    +'<label>Turno</label>'
+    +'<select id="cc_turno">'
+    +'<option value="AM" '+((c.turno==="AM")?"selected":"")+'>AM</option>'
+    +'<option value="PM" '+((!c.turno||c.turno==="PM")?"selected":"")+'>PM</option>'
+    +'</select></div>'
     +'<div class="mfield"><label>Status</label>'
     +'<select id="cc_ativo"><option value="true" '+(c.ativo!==false?"selected":"")+'>Ativo</option>'
     +'<option value="false" '+(c.ativo===false?"selected":"")+'>Inativo</option></select></div>'
@@ -1262,10 +1289,13 @@ function formCadastroColab(colab){
       if(!nome.trim()){toast("Nome \u00e9 obrigat\u00f3rio","erro");return;}
       var cpfDig=((document.getElementById("cc_cpf")||{}).value||"").replace(/\D/g,'');
       if(cpfDig.length!==11){toast("Informe um CPF v\u00e1lido (11 d\u00edgitos) \u2014 \u00e9 usado para conferir a identidade na entrega de EPI","erro");return;}
+      var _ccUnidade=(document.getElementById("cc_unidade")||{}).value||"SMG6";
       var obj={
         id:c.id||uid(),nome:nome.trim(),
         cpf:(document.getElementById("cc_cpf")||{}).value||"",
         contato:(document.getElementById("cc_contato")||{}).value||"",
+        unidade:_ccUnidade,
+        turno:_ccUnidade==="SMG6"?((document.getElementById("cc_turno")||{}).value||"PM"):"",
         tamCamisa:(document.getElementById("cc_camisa")||{}).value||"",
         tamCalca:(document.getElementById("cc_calca")||{}).value||"",
         tamBermuda:(document.getElementById("cc_bermuda")||{}).value||"",
@@ -1392,12 +1422,26 @@ function viewRel(){
   }
   _repRange={start,end};
 
-  const {ent,sai,valEnt,qtdSai,qtdEnt}=aggregate(dom,start,end);
+  let {ent,sai,valEnt,qtdSai,qtdEnt}=aggregate(dom,start,end);
+  // Filtro por unidade: em modo SMG6/XMG2 mostra apenas saídas daquela unidade
+  const repUnidade=dom==="safety"?(state.repUnidade||"geral"):"geral";
+  if(repUnidade!=="geral"){
+    sai=sai.filter(function(m){return colabUnidadeOf(m.parte||"")===repUnidade;});
+    qtdSai=sai.reduce(function(s,m){return s+m.qtd;},0);
+    // entradas não se aplicam ao relatório por unidade
+    ent=[];valEnt=0;qtdEnt=0;
+  }
   const porColab={};sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
 
   // ----- Linhas por item (com saldo inicial/entradas/saídas/saldo final) -----
   const busca=(state.repBusca||"").trim().toLowerCase();
   let itens=prodOf(dom).map(p=>{
+    if(repUnidade!=="geral"){
+      // Apenas saídas da unidade selecionada neste produto no período
+      const unitSai=sai.filter(function(m){return m.produtoId===p.id;}).reduce(function(s,m){return s+m.qtd;},0);
+      const ini=saldoAntes(p.id,start);
+      return {id:p.id,nome:p.descricao,un:p.unidade||"UN",ca:dom==="safety"?caAtualProduto(p.id):"",ini:0,ent:0,sai:unitSai,fim:unitSai};
+    }
     const ip=itemPeriodo(p.id,start,end);
     return {id:p.id,nome:p.descricao,un:p.unidade||"UN",ca:dom==="safety"?caAtualProduto(p.id):"",ini:ip.ini,ent:ip.ent,sai:ip.sai,fim:ip.fim};
   });
@@ -1589,6 +1633,12 @@ function viewRel(){
     ${weekOptions}
     <div class="fg"><label>Item</label><select id="rep_item" class="repsearch">${itemOpts}</select></div>
     <div class="fg"><label>Buscar EPI</label><input id="rep_busca" class="repsearch" placeholder="Ex: luva, capacete…" value="${esc(state.repBusca||"")}"></div>
+    ${dom==="safety"?`<div class="fg"><label>Unidade</label>
+      <div class="seg" id="repUnidSeg">
+        <button data-ru="geral" class="${repUnidade==="geral"?"active":""}">Geral</button>
+        <button data-ru="SMG6" class="${repUnidade==="SMG6"?"active":""}">SMG6</button>
+        <button data-ru="XMG2" class="${repUnidade==="XMG2"?"active":""}">XMG2</button>
+      </div></div>`:""}
     <div style="display:flex;gap:8px;align-items:flex-end;margin-left:auto;flex-wrap:wrap">
       <button class="btn primary sm" onclick="abrirRelatorioVisual()" style="margin-bottom:2px">&#128202; Relatório Visual (PDF)</button>
       <button class="btn ghost sm" data-act="csv" style="margin-bottom:2px">&#8675; CSV</button>
@@ -1597,8 +1647,8 @@ function viewRel(){
   </div>
   <div class="stats">
     <div class="stat"><div class="l">${periodoLbl}</div><div class="v" style="font-size:15px">${fmtD(start)} → ${fmtD(end)}</div></div>
-    <div class="stat green"><div class="l">Entradas</div><div class="v">${qtdEnt}<small> itens</small></div><div class="m">${ent.length} lançamento${ent.length===1?"":"s"} · ${brl(valEnt)}</div></div>
-    <div class="stat red"><div class="l">Saídas</div><div class="v">${qtdSai}<small> itens</small></div><div class="m">${sai.length} registro${sai.length===1?"":"s"}</div></div>
+    ${repUnidade==="geral"?`<div class="stat green"><div class="l">Entradas</div><div class="v">${qtdEnt}<small> itens</small></div><div class="m">${ent.length} lançamento${ent.length===1?"":"s"} · ${brl(valEnt)}</div></div>`:`<div class="stat amber"><div class="l">Unidade</div><div class="v" style="font-size:15px">${repUnidade}</div><div class="m">filtro ativo</div></div>`}
+    <div class="stat red"><div class="l">Saídas${repUnidade!=="geral"?" ("+repUnidade+")":""}</div><div class="v">${qtdSai}<small> itens</small></div><div class="m">${sai.length} registro${sai.length===1?"":"s"}</div></div>
     <div class="stat ${alertas.length?"red":"amber"}"><div class="l">${alertas.length?"⚠ Estoque baixo":"Colaboradores"}</div><div class="v">${alertas.length?alertas.length:Object.keys(porColab).length}</div><div class="m">${alertas.length?"item(ns) a repor":"atendidos no período"}</div></div>
   </div>
   ${alertBlock}
@@ -1607,8 +1657,8 @@ function viewRel(){
     ${evoBlock}
     ${motivoBlock}
     <div class="panel" style="grid-column:1 / -1">
-      <div class="panel-bar"><h3>Entradas × Saídas por EPI — ${periodoLbl}</h3>
-        <div class="legend"><span><span class="dot ent"></span>Entrou</span><span><span class="dot sai"></span>Saiu</span></div>
+      <div class="panel-bar"><h3>${repUnidade==="geral"?"Entradas × Saídas por EPI":"Saídas por EPI — "+repUnidade} — ${periodoLbl}</h3>
+        <div class="legend">${repUnidade==="geral"?`<span><span class="dot ent"></span>Entrou</span>`:""}<span><span class="dot sai"></span>Saiu</span></div>
       </div>
       <div class="scroll-y" style="max-height:520px">${barRows}</div>
     </div>
@@ -1617,8 +1667,8 @@ function viewRel(){
       <div class="panel-bar"><h3>Balanço do Período</h3></div>
       ${colChart}
       <div style="padding:0 16px 16px;font-size:12px;color:var(--txt-dim);line-height:1.6">
-        Entraram <b style="color:var(--green)">${qtdEnt}</b> e saíram <b style="color:var(--red)">${qtdSai}</b> itens${dom==="safety"?" de EPI":""} no período selecionado.
-        ${qtdSai>qtdEnt?`Saídas superaram entradas em <b>${qtdSai-qtdEnt}</b>.`:qtdEnt>qtdSai?`Entradas superaram saídas em <b>${qtdEnt-qtdSai}</b>.`:`Entradas e saídas equilibradas.`}
+        ${repUnidade==="geral"?`Entraram <b style="color:var(--green)">${qtdEnt}</b> e saíram <b style="color:var(--red)">${qtdSai}</b> itens${dom==="safety"?" de EPI":""} no período selecionado. ${qtdSai>qtdEnt?"Saídas superaram entradas em <b>"+(qtdSai-qtdEnt)+"</b>.":qtdEnt>qtdSai?"Entradas superaram saídas em <b>"+(qtdEnt-qtdSai)+"</b>.":"Entradas e saídas equilibradas."}`:
+        `Unidade <b>${repUnidade}</b>: saíram <b style="color:var(--red)">${qtdSai}</b> itens de EPI no período selecionado.`}
       </div>
     </div>
     ${colabBlock||`<div class="panel"><div class="panel-bar"><h3>Itens sem Saldo</h3></div><div class="scroll-y" style="max-height:300px">${
@@ -2337,6 +2387,10 @@ function wire(){
     };
     const cd=document.getElementById("colabDropdown");
     if(cd)cd.onchange=()=>{state.colab=cd.value||null;render();};
+    const cus=document.getElementById("colabUnidSeg");
+    if(cus&&!cus._b){cus._b=true;cus.addEventListener("click",function(e){var btn=e.target.closest("[data-cu]");if(btn){state.colabUnidade=btn.dataset.cu;state.colab=null;render();}});}
+    const cts=document.getElementById("colabTurnoSeg");
+    if(cts&&!cts._b){cts._b=true;cts.addEventListener("click",function(e){var btn=e.target.closest("[data-ct]");if(btn){state.colabTurno=btn.dataset.ct;state.colab=null;render();}});}
     document.querySelectorAll("[data-delmov]").forEach(b=>b.onclick=()=>delMov(b.dataset.delmov));
   }
   if(state.view==="relatorios"){
@@ -2352,6 +2406,8 @@ function wire(){
       clearTimeout(window._repBuscaT);
       window._repBuscaT=setTimeout(()=>{render();setTimeout(()=>{var el=document.getElementById("rep_busca");if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},0);},250);
     };
+    const ruSeg=document.getElementById("repUnidSeg");
+    if(ruSeg&&!ruSeg._b){ruSeg._b=true;ruSeg.addEventListener("click",function(e){var btn=e.target.closest("[data-ru]");if(btn){state.repUnidade=btn.dataset.ru;render();}});}
   }
   if(state.view==="dashboard"){
     document.querySelectorAll("#repSeg button").forEach(b=>b.onclick=()=>{state.rep=b.dataset.p;render();});
