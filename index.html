@@ -1118,7 +1118,21 @@ function viewColabList(){
   const dom=state.dom;
   const btn=dom==="safety"?`<button class="btn primary sm" data-act="novaEntrega">＋ Nova Entrega de EPI</button>`:"";
   const btnCad=dom==="safety"?'<button class="btn ghost sm" onclick="formCadastroColab()">＋ Cadastrar Colaborador</button>':"";
-  const ativos=colabListaAtivos(dom);
+  const unidadeSel=dom==="safety"?(state.colabUnidade||"SMG6"):"";
+  const turnoSel=dom==="safety"&&unidadeSel==="SMG6"?(state.colabTurno||"PM"):"";
+  const ativos=colabListaAtivos(dom,unidadeSel||undefined,turnoSel||undefined);
+
+  const unidadeTabs=dom==="safety"?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+    <span style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600">Unidade:</span>
+    <div class="seg" id="colabUnidSeg">
+      <button data-cu="SMG6" class="${unidadeSel==="SMG6"?"active":""}">SMG6</button>
+      <button data-cu="XMG2" class="${unidadeSel==="XMG2"?"active":""}">XMG2</button>
+    </div>
+    ${unidadeSel==="SMG6"?`<div class="seg" id="colabTurnoSeg" style="margin-left:12px">
+      <button data-ct="AM" class="${turnoSel==="AM"?"active":""}">AM</button>
+      <button data-ct="PM" class="${turnoSel==="PM"?"active":""}">PM</button>
+    </div>`:""}
+  </div>`:"";
 
   // Stats movimentações por colaborador
   const statsMap={};
