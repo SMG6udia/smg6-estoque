@@ -1,7 +1,20 @@
 <!DOCTYPE html>
+<!-- SMG6 v10 - build 2026-06-30 -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<script>
+window._lastJsError=null;
+window.onerror=function(msg,src,line,col,err){
+  window._lastJsError='JS ERROR linha '+line+': '+msg;
+  var show=function(){
+    var d=document.getElementById('_dbg');
+    if(!d){d=document.createElement('div');d.id='_dbg';d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#d23b30;color:#fff;padding:10px 14px;font:700 13px monospace;white-space:pre-wrap;cursor:pointer;';d.title='Clique para fechar';d.onclick=function(){d.remove();};(document.body||document.documentElement).appendChild(d);}
+    d.textContent=window._lastJsError;
+  };
+  if(document.body)show();else document.addEventListener('DOMContentLoaded',show);
+  return false;
+};</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Controle de Estoque · SMG6</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
