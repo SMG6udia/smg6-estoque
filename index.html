@@ -2017,7 +2017,6 @@ function abrirRelatorioVisual(){
 
     if(hasTams){
       let pEnt=0,pSai=0,pIni=0;
-      const rowspan=p.tamanhos.length+1; // +1 para linha de total
       // estoque sem tamanho (lançado antes de tamanhos serem configurados)
       const semTamSaldo=saldoVar(p.id,"","");
       const semTamEnt=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="entrada"&&(m.tamanho||"")===""&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
