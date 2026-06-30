@@ -1524,6 +1524,7 @@ function viewRel(){
 
   // ----- ESTOQUE ATUAL POR TAMANHO -----
   const tamRows=prodOf(dom).filter(p=>p.tamanhos&&p.tamanhos.length>0).map(p=>{
+    const semTam=saldoVar(p.id,"",""); // estoque lançado sem tamanho atribuído
     const tamCols=p.tamanhos.map(t=>{
       const st=saldoVar(p.id,t,"");
       return `<span style="display:inline-flex;flex-direction:column;align-items:center;min-width:48px;margin:3px">
@@ -1531,13 +1532,25 @@ function viewRel(){
         <span class="chip tam" style="margin-top:3px">${esc(t)}</span>
       </span>`;
     }).join("");
+    const semTamChip=semTam>0
+      ?`<span style="display:inline-flex;flex-direction:column;align-items:center;min-width:52px;margin:3px">
+          <span style="font-family:var(--mono);font-weight:700;font-size:15px;color:var(--amber)">${semTam}</span>
+          <span class="chip" style="margin-top:3px;background:#fff3cd;color:#856404;font-size:9.5px">Sem tam.</span>
+        </span>`
+      :"";
+    const semTamAlert=semTam>0
+      ?`<div style="margin-top:6px;padding:5px 10px;background:#fff8e1;border-left:3px solid var(--amber);border-radius:4px;font-size:11.5px;color:#7a5c00">
+          ⚠ <b>${semTam}</b> unidade(s) sem tamanho atribuído — lançadas antes de tamanhos serem configurados. Faça um ajuste de estoque para corrigir.
+        </div>`
+      :"";
     const totProd=atual(p.id);
     return `<div class="itembar">
       <div class="top">
         <div class="nm">${esc(p.descricao)}${dom==="safety"&&caAtualProduto(p.id)?`<span class="ca">CA ${esc(caAtualProduto(p.id))}</span>`:""}</div>
         <div class="sd" style="color:${totProd<=0?"var(--red)":"var(--blue)"}">${totProd}<small> total</small></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0">${tamCols}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0">${tamCols}${semTamChip}</div>
+      ${semTamAlert}
     </div>`;
   }).join("") || `<div class="empty">Nenhum produto com tamanhos cadastrados.</div>`;
   const estoqueTagRows=prodOf(dom).some(p=>p.tamanhos&&p.tamanhos.length>0)
@@ -2005,6 +2018,12 @@ function abrirRelatorioVisual(){
     if(hasTams){
       let pEnt=0,pSai=0,pIni=0;
       const rowspan=p.tamanhos.length+1; // +1 para linha de total
+      // estoque sem tamanho (lançado antes de tamanhos serem configurados)
+      const semTamSaldo=saldoVar(p.id,"","");
+      const semTamEnt=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="entrada"&&(m.tamanho||"")===""&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+      const semTamSai=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="saida"&&(m.tamanho||"")===""&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
+      const hasSemTam=semTamSaldo>0||semTamEnt>0||semTamSai>0;
+      const rowspan=p.tamanhos.length+(hasSemTam?1:0)+1; // +sem-tam row +total row
       const tamRows=p.tamanhos.map(function(tam,ti){
         const entT=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="entrada"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
         const saiT=MOVS.filter(m=>m.produtoId===p.id&&m.tipo==="saida"&&m.tamanho===tam&&m.data>=start&&m.data<=end).reduce((s,m)=>s+(m.qtd||0),0);
@@ -2021,12 +2040,22 @@ function abrirRelatorioVisual(){
           +`<td class="n fim${salT<=0?" zero":""}">${salT}</td>`
           +`</tr>`;
       }).join("");
+      const semTamRow=hasSemTam
+        ?`<tr style="background:#fff8e1">`
+          +`<td class="tam-cell" style="color:#856404;font-size:10px">⚠ Sem tam.</td>`
+          +`<td class="n ini" style="color:#856404">${semTamSaldo-semTamEnt+semTamSai}</td>`
+          +`<td class="n ent" style="color:#856404">${semTamEnt>0?"+"+semTamEnt:"—"}</td>`
+          +`<td class="n sai" style="color:#856404">${semTamSai>0?"−"+semTamSai:"—"}</td>`
+          +`<td class="n fim" style="color:#856404;font-weight:800">${semTamSaldo}</td>`
+          +`</tr>`
+        :"";
+      if(hasSemTam){pEnt+=semTamEnt;pSai+=semTamSai;}
       const totAtual=atual(p.id);
       gTotalEnt+=pEnt;gTotalSai+=pSai;gTotalAtual+=totAtual;
-      tableRows+=tamRows
+      tableRows+=tamRows+semTamRow
         +`<tr class="tot-row">`
         +`<td class="tam-tot">Total</td>`
-        +`<td class="n ini-t">${pIni}</td>`
+        +`<td class="n ini-t">${pIni+(hasSemTam?semTamSaldo-semTamEnt+semTamSai:0)}</td>`
         +`<td class="n ent-t">${pEnt>0?"+"+pEnt:"—"}</td>`
         +`<td class="n sai-t">${pSai>0?"−"+pSai:"—"}</td>`
         +`<td class="n fim-t${totAtual<=0?" zero":""}">${totAtual}</td>`
