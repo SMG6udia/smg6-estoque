@@ -771,7 +771,6 @@ function _uEditar(email){
 function _uForm(u){
   var isNew=!u;
   var niveis=["admin","operador","visualizador"];
-  var curUnidade=c.unidade||"SMG6";
   var body='<div class="mgrid">'
     +'<div class="mfield full"><label>Nome Completo <span class="req">*</span></label>'
     +'<input id="uf_nome" value="'+(u?esc(u.nome||""):"")+'"></div>'
@@ -2584,7 +2583,7 @@ function formEntrega(prefColab){
 
 /* ── helper: barra de progresso wizard ── */
 function _wz_steps(ativo){
-  var defs=[["1","Dados"],["2","CPF"],["3","Foto"],["4","Assinatura"]];
+  var defs=[["1","Dados"],["2","Foto"],["3","Assinatura"]];
   var html='<div style="display:flex;gap:8px;margin-bottom:16px">';
   for(var i=0;i<defs.length;i++){
     var idx=i+1, n=defs[i][0], l=defs[i][1];
@@ -2633,9 +2632,9 @@ function _wz_step1(prods,prefColab){
     +'</div>'
     +'<button type="button" class="btn primary sm" style="margin-top:4px" onclick="_wz_adicionarItem()">&#43; Adicionar à lista</button>'
     +'</div>';
-  openModal("Nova Entrega de EPI \u2014 Etapa 1 de 4",body,[
+  openModal("Nova Entrega de EPI \u2014 Etapa 1 de 3",body,[
     {label:"Cancelar",cls:"ghost",act:function(){closeModal();}},
-    {label:"Pr&oacute;ximo: CPF \u2192",cls:"primary",act:_wz_validarDados}
+    {label:"Pr&oacute;ximo: Foto \u2192",cls:"primary",act:_wz_validarDados}
   ]);
 
 
@@ -2785,10 +2784,13 @@ function _wz_validarDados(){
   var fi=EPI_WZ.itens[0];
   EPI_WZ.dados={colab:colab,lib:lib,data:data,
     prod:fi.prod,qtd:fi.qtd,tam:fi.tam,obs:fi.obs,motivo:fi.motivo,tipoModelo:fi.tipoModelo};
-  _wz_step2();
+  // CPF lookup (sem etapa de confirmação — busca direto do cadastro)
+  var _colabCpf=COLABORADORES.find(function(c){return c.nome===colab;});
+  EPI_WZ._cpfColab=_colabCpf?_colabCpf.cpf||null:null;
+  _wz_step3();
 }
 
-/* ── ETAPA 2 · CPF ── */
+/* ── ETAPA 2 · CPF (desativada — CPF vem do cadastro automaticamente) ── */
 function _wz_step2(){
   var nome=EPI_WZ.dados.colab;
   EPI_WZ._cpfColab=null;
@@ -2851,7 +2853,7 @@ function _wz_validarCPF(){
 }
 
 function _wz_step3(){
-  var body=_wz_steps(3)
+  var body=_wz_steps(2)
     +'<div style="text-align:center">'
     +'<div style="font-size:13px;color:var(--txt-dim);margin-bottom:12px">Posicione o colaborador em frente à câmera e clique em <b>Capturar Foto</b>.</div>'
     +'<div style="position:relative;display:inline-block">'
@@ -2867,8 +2869,8 @@ function _wz_step3(){
     +'<button class="btn ghost sm" id="wz_recapture" style="display:none" onclick="_wz_recapturar()">↺ Recapturar</button>'
     +'<button class="btn green" id="wz_snap_btn" onclick="_wz_capturarFoto()">📷 Capturar Foto</button>'
     +'</div></div>';
-  openModal("Nova Entrega de EPI \u2014 Etapa 3 de 4",body,[
-    {label:"\u2190 Voltar",cls:"ghost",act:function(){_wz_pararCamera();_wz_step2();}},
+  openModal("Nova Entrega de EPI \u2014 Etapa 2 de 3",body,[
+    {label:"\u2190 Voltar",cls:"ghost",act:function(){_wz_pararCamera();_wz_step1();}},
     {label:"Pr\u00f3ximo: Assinatura \u2192",cls:"primary",act:_wz_validarFoto}
   ]);
   setTimeout(function(){
@@ -2921,7 +2923,7 @@ function _wz_validarFoto(){
 
 function _wz_step4(){
   var prodObj=PRODUTOS.find(function(x){return x.id===EPI_WZ.dados.prod;})||{descricao:""};
-  var body=_wz_steps(4)
+  var body=_wz_steps(3)
     +'<div style="text-align:center;margin-bottom:10px">'
     +'<div style="font-size:13px;color:var(--txt-dim)">Colaborador: <b>'+esc(EPI_WZ.dados.colab)+'</b> &middot; Produto: <b>'+esc(prodObj.descricao)+'</b></div>'
     +'<div style="font-size:12px;color:var(--txt-faint);margin-top:4px">Assine no campo abaixo com o dedo ou mouse para confirmar o recebimento.</div>'
@@ -2934,7 +2936,7 @@ function _wz_step4(){
     +'<button class="btn ghost sm" onclick="_wz_limparAssinatura()">&times; Limpar</button>'
     +'</div>'
     +'<div id="sig_err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:4px"></div>';
-  openModal("Nova Entrega de EPI \u2014 Etapa 4 de 4",body,[
+  openModal("Nova Entrega de EPI \u2014 Etapa 3 de 3",body,[
     {label:"\u2190 Voltar",cls:"ghost",act:_wz_step3},
     {label:"\u2713 Confirmar e Gerar Comprovante",cls:"green",act:_wz_finalizar}
   ]);
