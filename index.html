@@ -511,6 +511,10 @@ function mascaraTelefone(v){
   if(v.length>0)  return"("+v;
   return"";
 }
+function colabGeneroOf(nome){
+  const c=COLABORADORES.find(function(x){return x.nome===nome;});
+  return (c&&c.genero)?c.genero:null;
+}
 function colabUnidadeOf(nome){
   const c=COLABORADORES.find(function(x){return x.nome===nome;});
   if(c&&c.unidade)return c.unidade;
@@ -1175,7 +1179,7 @@ function viewColabList(){
         +'<td class="num" style="display:flex;gap:4px;justify-content:flex-end">'+reciboBtn+'<button class="icon-btn del" title="Excluir" data-delmov="'+r.id+'">&#128465;</button></td></tr>';
     }).join("");
     const chips=Object.entries(porProd).sort((a,b)=>b[1]-a[1]).map(([p,q])=>`<span class="chip tam" style="margin:3px">${esc(p)}: <b>${q}</b></span>`).join("");
-    const btnDesl=dom==="safety"?`<button class="btn danger sm" onclick="desligarColab('${esc(colabSel)}')">⚠ Desligar Colaborador</button>`:"";
+    const btnDesl=(dom==="safety"&&isAdmin())?`<button class="btn danger sm" onclick="desligarColab('${esc(colabSel)}')">⚠ Desligar Colaborador</button>`:"";
     return `<div class="panel">
       <div class="panel-bar"><h3>Colaboradores · ${dom==="safety"?"Safety":"Insumos"}</h3><div class="right" style="gap:8px">${btnCad}${btn}</div></div>
       ${selectHtml}
@@ -1310,6 +1314,7 @@ function formCadastroColab(colab){
         contato:(document.getElementById("cc_contato")||{}).value||"",
         unidade:_ccUnidade,
         turno:_ccUnidade==="SMG6"?((document.getElementById("cc_turno")||{}).value||"PM"):"",
+        genero:(document.getElementById("cc_genero")||{}).value||"Masc.",
         tamCamisa:(document.getElementById("cc_camisa")||{}).value||"",
         tamCalca:(document.getElementById("cc_calca")||{}).value||"",
         tamBermuda:(document.getElementById("cc_bermuda")||{}).value||"",
@@ -2456,13 +2461,15 @@ function formProduto(prod){
         <div class="mfield"><label>Unidade</label><input id="p_un" value="${esc(cur.unidade||"UN")}"></div>
         <div class="mfield full"><label>Tamanhos (separe por vírgula)</label><input id="p_tam" value="${esc((cur.tamanhos||[]).join(", "))}" placeholder="Ex: P, M, G, GG"></div>
         <div class="mfield full"><label>Tipo/Modelo (Cores)</label><input id="p_cor" value="${esc((cur.cores||[]).join(", "))}" placeholder="Ex: Nitrílica, Látex"></div>
+        <div class="mfield"><label>Gênero</label><select id="p_genero"><option value="Unissex" ${(cur.genero||"Unissex")==="Unissex"?"selected":""}>Unissex (padrão)</option><option value="Masc." ${cur.genero==="Masc."?"selected":""}>Masc. (Masculino)</option><option value="Fem." ${cur.genero==="Fem."?"selected":""}>Fem. (Feminino)</option></select></div>
       </div>`,
       [{label:"Cancelar",cls:"ghost",act:closeModal},
        {label:"Salvar",cls:"primary",act:async()=>{
          const desc=val("p_desc").trim();if(!desc){toast("Informe a descrição","erro");return;}
          const obj={dom,setor:"Safety",classificacao:"Safety",descricao:desc,unidade:val("p_un").trim()||"UN",codRef:"",
            tamanhos:val("p_tam").split(",").map(s=>s.trim()).filter(Boolean),
-           cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean)};
+           cores:val("p_cor").split(",").map(s=>s.trim()).filter(Boolean),
+           genero:val("p_genero")||"Unissex"};
          if(isNew){obj.id=uid();PRODUTOS.push(obj);}else Object.assign(prod,obj);
          const saved=await persistProd(isNew?obj:prod,isNew);if(!saved)return;
          if(isNew)state.sel=obj.id;closeModal();toast(isNew?"Produto cadastrado.":"Produto atualizado.","ok");render();
@@ -2525,6 +2532,30 @@ function formMov(tipo){
     ["m_tam","m_cor"].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=upd;});
     if(isSai){const pe=document.getElementById("m_parte"),da=document.getElementById("m_data");if(pe)pe.onchange=chk;if(da)da.onchange=chk;}
     upd();
+    // Populate admin user dropdown for entrada
+    if(!isSai){
+      var muSel=document.getElementById("m_user");
+      if(muSel){
+        var admins=Object.values(_uCache).filter(function(u){return u.nivel==="admin";});
+        if(admins.length>0){
+          muSel.innerHTML='<option value="">— selecione —</option>';
+          admins.forEach(function(u){muSel.innerHTML+='<option value="'+esc(u.nome||u.email)+'">'+esc(u.nome||u.email)+'</option>';});
+        } else {
+          // fallback: fetch from API
+          api("getUsuarios",null).then(function(r){
+            if(r&&r.ok&&r.data){
+              muSel.innerHTML='<option value="">— selecione —</option>';
+              r.data.filter(function(u){return u.nivel==="admin";}).forEach(function(u){
+                _uCache[u.email]=u;
+                muSel.innerHTML+='<option value="'+esc(u.nome||u.email)+'">'+esc(u.nome||u.email)+'</option>';
+              });
+            } else {
+              muSel.outerHTML='<input id="m_user" placeholder="Quem lança (admin)">';
+            }
+          });
+        }
+      }
+    }
     function chk(){const box=document.getElementById("movAlert");if(!box)return;box.innerHTML="";if(!isSai)return;
       const parte=val("m_parte").trim(),data=val("m_data");if(!parte)return;
       const prev=MOVS.filter(m=>m.tipo==="saida"&&m.produtoId===p.id&&m.parte.trim().toLowerCase()===parte.toLowerCase()&&m.data<=data).sort((a,b)=>b.data>a.data?1:-1)[0];
@@ -2673,9 +2704,13 @@ function _wz_step1(prods,prefColab){
       // Se nenhum tamanho selecionado, mostra o saldo total do produto
       if(pr.tamanhos&&pr.tamanhos.length){
         var tamSel=ts?ts.value:"";
-        disp.value=tamSel?saldoVar(pr.id,tamSel,""):atual(pr.id);
+        var tipoEl=document.getElementById("ew_tipo");
+        var corSel=tipoEl?tipoEl.value:"";
+        disp.value=tamSel?saldoVar(pr.id,tamSel,corSel):atual(pr.id);
       }else{
-        disp.value=atual(pr.id);
+        var tipoEl2=document.getElementById("ew_tipo");
+        var corSel2=tipoEl2?tipoEl2.value:"";
+        disp.value=corSel2?saldoVar(pr.id,"",corSel2):atual(pr.id);
       }
       chk();
     }
@@ -2699,7 +2734,28 @@ function _wz_step1(prods,prefColab){
     }
     if(ps)ps.onchange=fill;
     if(ts)ts.onchange=upd;
-    if(cp)cp.onchange=chk;
+    var ewTipo=document.getElementById("ew_tipo");
+    if(ewTipo)ewTipo.onchange=upd;
+    if(cp){
+      cp.onchange=function(){
+        chk();
+        // Filter product list by collaborator gender
+        var colabNome=cp.value;
+        var colabGenero=colabNome?colabGeneroOf(colabNome):null;
+        if(ps){
+          var prevVal=ps.value;
+          ps.innerHTML='<option value="">— selecione —</option>';
+          prods.forEach(function(p){
+            var pg=p.genero||"Unissex";
+            if(!colabGenero||pg==="Unissex"||pg===colabGenero){
+              ps.innerHTML+='<option value="'+p.id+'">'+esc(p.descricao)+'</option>';
+            }
+          });
+          ps.value=prevVal||"";
+          fill();
+        }
+      };
+    }
     if(da)da.onchange=chk;
     // Inicializa saldo se produto já vier pré-selecionado ao abrir o modal
     if(ps&&ps.value) fill(); else upd();
