@@ -1176,7 +1176,7 @@ function viewColabList(){
       const ant=reg.filter(x=>x.produtoId===r.produtoId&&x.data<r.data).sort((a,b)=>b.data>a.data?1:-1)[0];
       const d=ant?days(ant.data,r.data):null;
       const flag=(d!==null&&d<ALERTA_DIAS)?`<span class="chip warn" title="Intervalo de ${d} dias">⚠ ${d}d</span>`:"";
-      var reciboBtn=(r.temRecibo||r.reciboRef)?'<button class="icon-btn" title="Ver Comprovante de Entrega" onclick="reemitirRecibo(\'"+(r.reciboRef||r.id)+"+'\')">&#128196;</button>':'';
+      var reciboBtn=(r.temRecibo||r.reciboRef)?'<button class="icon-btn" title="Ver Comprovante de Entrega" onclick="reemitirRecibo(\''+(r.reciboRef||r.id)+'\')">&#128196;</button>':'';
       return '<tr><td class="num">'+fmtD(r.data)+'</td><td><b>'+esc(p?p.descricao:"?")+'</b></td>'
         +'<td>'+(r.tamanho?'<span class="chip tam">'+esc(r.tamanho)+'</span>':(r.cor?corDot(r.cor)+esc(r.cor):"—"))+'</td>'
         +'<td class="num">'+r.qtd+'</td><td>'+esc(r.liberadoPor||"")+' '+flag+'</td>'
