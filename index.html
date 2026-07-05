@@ -1286,9 +1286,11 @@ function formCadastroColab(colab){
     +'<option value="AM" '+((! c.turno||c.turno==="AM")?"selected":"")+'>AM</option>'
     +'<option value="PM" '+((c.turno==="PM")?"selected":"")+'>PM</option>'
     +'</select></div>'
-    +'<div class="mfield"><label>Status</label>'
-    +'<select id="cc_ativo"><option value="true" '+(c.ativo!==false?"selected":"")+'>Ativo</option>'
-    +'<option value="false" '+(c.ativo===false?"selected":"")+'>Inativo</option></select></div>'
+    +'<div class="mfield"><label>Gênero <span class="req">*</span></label>'
+    +'<select id="cc_genero">'
+    +'<option value="Masc." '+((c.genero==="Masc."||!c.genero)?"selected":"")+'>Masc. (Masculino)</option>'
+    +'<option value="Fem." '+((c.genero==="Fem.")?"selected":"")+'>Fem. (Feminino)</option>'
+    +'</select></div>'
     +'</div>'
     +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-dim);margin:14px 0 8px">Tamanhos de Uniforme</div>'
     +'<div class="mgrid">'
@@ -1321,7 +1323,7 @@ function formCadastroColab(colab){
         tamBota:(document.getElementById("cc_bota")||{}).value||"",
         tamBlusa:(document.getElementById("cc_blusa")||{}).value||"",
         tamColete:(document.getElementById("cc_colete")||{}).value||"",
-        ativo:(document.getElementById("cc_ativo")||{}).value!=="false"
+        ativo:true
       };
       var r=await api("saveColaborador",{colaborador:obj,isNew:isNew});
       if(!r.ok){toast("Erro: "+r.error,"erro");return;}
@@ -2520,7 +2522,7 @@ function formMov(tipo){
               :`<div class="mfield"><label>Fornecedor</label><input id="m_parte" placeholder="Fornecedor / origem"></div>`;
   body+=tamOpts+corOpts+`<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="m_qtd" min="1" step="1" value="1"></div>`;
   body+=isSai?`<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="m_lib" placeholder="Responsável"></div><div class="mfield"><label>Disponível</label><input id="m_disp" readonly value="—"></div>`
-              :`<div class="mfield"><label>Custo unitário (R$)</label><input type="number" id="m_cu" min="0" step="0.01" placeholder="0,00"></div><div class="mfield"><label>Usuário</label><input id="m_user" placeholder="Quem lança"></div>`;
+              :`<div class="mfield"><label>Custo unitário (R$)</label><input type="number" id="m_cu" min="0" step="0.01" placeholder="0,00"></div><div class="mfield"><label>Usuário (Admin) <span class="req">*</span></label><select id="m_user"><option value="">— selecione —</option></select></div>`;
   if(!isSai&&state.dom==="safety"){
     body+=`<div class="mfield full"><label>C.A. do EPI <span class="req">*</span></label><input id="m_ca" inputmode="numeric" placeholder="Nº do Certificado de Aprovação" value="${esc(p.ca||"")}"></div>`;
   }
