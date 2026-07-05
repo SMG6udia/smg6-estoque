@@ -1073,7 +1073,7 @@ function viewEstoque(){
               </summary>
               <div style="padding:12px 14px 14px 36px;background:#f6f8fb;border-bottom:1px solid var(--line-soft)">
                 <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-faint);font-weight:600;margin-bottom:10px">Saldo por tamanho</div>
-                <div style="overflow-x:auto">${tamDetail}</div>
+                ${hasCores?'<div style="overflow-x:auto">':'<div style="display:flex;flex-wrap:wrap;gap:8px">'}${tamDetail}</div>
               </div>
             </details>
           </td>
