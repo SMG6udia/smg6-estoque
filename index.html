@@ -1714,6 +1714,7 @@ function viewRel(){
         <button data-ru="XMG2" class="${repUnidade==="XMG2"?"active":""}">XMG2</button>
       </div></div>`:""}
     <div style="display:flex;gap:8px;align-items:flex-end;margin-left:auto;flex-wrap:wrap">
+      <button class="btn ghost sm" onclick="abrirRelatorioFormal()" style="margin-bottom:2px">&#128203; Relatório Formal</button>
       <button class="btn primary sm" onclick="abrirRelatorioVisual()" style="margin-bottom:2px">&#128202; Relatório Visual (PDF)</button>
       <button class="btn ghost sm" data-act="csv" style="margin-bottom:2px">&#8675; CSV</button>
       <button class="btn ghost sm" onclick="backupManual()" style="margin-bottom:2px" title="Backup agora no Google Drive">&#9729; Drive</button>
@@ -2345,6 +2346,303 @@ function abrirRelatorioVisual(){
   if(!win)toast("Permita pop-ups para abrir o relatório visual.","warn");
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
+
+function abrirRelatorioFormal(){
+  var dom=state.dom;
+  var r=(_repRange&&_repRange.start&&_repRange.end)?_repRange:repRange();
+  var start=r.start,end=r.end;
+  var periodoLbl=document.querySelector(".stat .l")?document.querySelector(".stat .l").textContent:"Período";
+  var now=new Date().toLocaleString("pt-BR");
+  var repUnidade=(dom==="safety")?(state.repUnidade||"geral"):"geral";
+
+  var agg=aggregate(dom,start,end);
+  var entAll=agg.ent,saiAll=agg.sai;
+
+  // Apply unit filter to saídas
+  var sai=repUnidade==="geral"?saiAll:saiAll.filter(function(m){return colabUnidadeOf(m.parte||"")===repUnidade;});
+  var ent=entAll;
+
+  var qtdEnt=ent.reduce(function(s,m){return s+(m.qtd||0);},0);
+  var qtdSai=sai.reduce(function(s,m){return s+(m.qtd||0);},0);
+  var valEnt=ent.reduce(function(s,m){return s+((m.custoUnit||0)*(m.qtd||0));},0);
+
+  var prods=prodOf(dom).slice().sort(function(a,b){return a.descricao.localeCompare(b.descricao,"pt-BR");});
+
+  // ---- Pre-compute balance for KPI low-stock count ----
+  var itemsData=[];
+  prods.forEach(function(p){
+    var ip=itemPeriodo(p.id,start,end);
+    var minimo=getMin(p.id);
+    var sitClass="ok";
+    if(ip.fim<=0){sitClass="danger";}
+    else if(minimo>0&&ip.fim<=minimo){sitClass="warn";}
+    if(ip.ent===0&&ip.sai===0&&ip.fim===0&&ip.ini===0)return;
+    itemsData.push({p:p,ip:ip,minimo:minimo,sitClass:sitClass});
+  });
+  var lowStockCount=itemsData.filter(function(d){return d.sitClass!=="ok";}).length;
+
+  // ---- Entries table ----
+  var entRows="";
+  ent.slice().sort(function(a,b){return a.data.localeCompare(b.data);}).forEach(function(m){
+    var p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+    if(!p)return;
+    var cu=m.custoUnit?("R$ "+m.custoUnit.toFixed(2).replace(".",",")):"—";
+    entRows+="<tr>"
+      +"<td>"+esc(p.descricao)+"</td>"
+      +"<td>"+esc(m.cor||"—")+"</td>"
+      +"<td>"+esc(m.tamanho||"—")+"</td>"
+      +"<td>"+esc(m.parte||"—")+"</td>"
+      +"<td>"+fmtD(m.data)+"</td>"
+      +'<td class="r pos">+'+m.qtd+"</td>"
+      +'<td class="r">'+cu+"</td>"
+      +"</tr>";
+  });
+  if(!entRows)entRows='<tr><td colspan="7" class="empty">Nenhuma entrada no período.</td></tr>';
+
+  // ---- Exits table ----
+  var saiRows="";
+  sai.slice().sort(function(a,b){return a.data.localeCompare(b.data);}).forEach(function(m){
+    var p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+    if(!p)return;
+    saiRows+="<tr>"
+      +"<td>"+esc(p.descricao)+"</td>"
+      +"<td>"+esc(m.cor||"—")+"</td>"
+      +"<td>"+esc(m.tamanho||"—")+"</td>"
+      +"<td>"+esc(m.parte||"—")+"</td>"
+      +"<td>"+esc(m.liberadoPor||"—")+"</td>"
+      +"<td>"+fmtD(m.data)+"</td>"
+      +'<td class="r neg">−'+m.qtd+"</td>"
+      +"</tr>";
+  });
+  if(!saiRows)saiRows='<tr><td colspan="7" class="empty">Nenhuma saída no período.</td></tr>';
+
+  // ---- Balance table ----
+  var balRows="";
+  itemsData.forEach(function(d){
+    var p=d.p,ip=d.ip,minimo=d.minimo,sitClass=d.sitClass;
+    var situacao=sitClass==="danger"?"Estoque baixo":sitClass==="warn"?"Atenção":"Regular";
+    var ca=dom==="safety"?caAtualProduto(p.id):"";
+    var caTag=ca?(' <small style="color:#888;font-size:9px">CA '+esc(ca)+"</small>"):"";
+    var finCls=ip.fim<=0?"neg":ip.fim<=(minimo||0)?"warn":"pos";
+    balRows+="<tr>"
+      +"<td>"+esc(p.descricao)+caTag+"</td>"
+      +"<td>"+esc(p.unidade||"UN")+"</td>"
+      +'<td class="r">'+(minimo||"—")+"</td>"
+      +'<td class="r num">'+ip.ini+"</td>"
+      +'<td class="r pos">+'+(ip.ent||0)+"</td>"
+      +'<td class="r neg">−'+(ip.sai||0)+"</td>"
+      +'<td class="r '+finCls+'">'+ip.fim+"</td>"
+      +'<td><span class="badge '+sitClass+'">'+situacao+"</span></td>"
+      +"</tr>";
+  });
+  if(!balRows)balRows='<tr><td colspan="8" class="empty">Nenhum item com movimentação.</td></tr>';
+
+  // ---- Collaborator report ----
+  var colabMap={};
+  sai.forEach(function(m){
+    var nome=m.parte||"";
+    if(!nome)return;
+    if(!colabMap[nome])colabMap[nome]=[];
+    colabMap[nome].push(m);
+  });
+
+  var intervalSummary={};
+  var colabSections="";
+
+  Object.keys(colabMap).sort().forEach(function(nome){
+    var movs=colabMap[nome].slice().sort(function(a,b){return a.data.localeCompare(b.data);});
+    var colabObj=COLABORADORES.find(function(c){return c.nome===nome;});
+    var meta=colabObj?[colabObj.setor||colabObj.funcao||"",colabObj.turno||"",colabObj.unidade||""].filter(Boolean).join(" · "):"";
+
+    var rows="";
+    movs.forEach(function(m){
+      var p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+      if(!p)return;
+
+      // Find most recent previous withdrawal of same product by same person
+      var prevMovs=MOVS.filter(function(x){
+        return x.parte===nome&&x.produtoId===m.produtoId&&x.tipo==="saida"&&x.data<m.data;
+      }).sort(function(a,b){return b.data.localeCompare(a.data);});
+
+      var intervalHtml='<span class="int na">—</span>';
+      if(prevMovs.length>0){
+        var d1=new Date(prevMovs[0].data+"T00:00:00");
+        var d2=new Date(m.data+"T00:00:00");
+        var diff=Math.round((d2-d1)/86400000);
+        var icls=diff<10?"alert":diff<20?"warn":"ok";
+        intervalHtml='<span class="int '+icls+'">'+diff+" dias</span>";
+        if(!intervalSummary[m.produtoId])intervalSummary[m.produtoId]={nome:p.descricao,count:0,total:0,min:9999,minColab:""};
+        intervalSummary[m.produtoId].count++;
+        intervalSummary[m.produtoId].total+=diff;
+        if(diff<intervalSummary[m.produtoId].min){intervalSummary[m.produtoId].min=diff;intervalSummary[m.produtoId].minColab=nome;}
+      }
+
+      rows+="<tr>"
+        +"<td>"+esc(p.descricao)+"</td>"
+        +"<td>"+esc(m.cor||"—")+"</td>"
+        +"<td>"+esc(m.tamanho||"—")+"</td>"
+        +"<td>"+fmtD(m.data)+"</td>"
+        +"<td>"+esc(m.liberadoPor||"—")+"</td>"
+        +'<td class="r">'+m.qtd+"</td>"
+        +'<td class="r">'+intervalHtml+"</td>"
+        +"</tr>";
+    });
+
+    colabSections+='<div class="sec-label">'+esc(nome)+(meta?' <span class="sec-meta">— '+esc(meta)+"</span>":"")+"</div>"
+      +'<div style="overflow-x:auto"><table>'
+      +"<thead><tr>"
+      +"<th>Item / EPI</th><th>Tipo / Cor</th><th>Tam.</th><th>Data retirada</th><th>Liberado por</th><th class='r'>Qtd.</th><th class='r'>Intervalo anterior</th>"
+      +"</tr></thead><tbody>"+rows+"</tbody></table></div>";
+  });
+
+  if(!colabSections)colabSections='<div class="empty" style="padding:20px 0">Nenhuma retirada de colaboradores no período.</div>';
+
+  // ---- Interval summary ----
+  var summaryRows="";
+  Object.values(intervalSummary).sort(function(a,b){return a.nome.localeCompare(b.nome,"pt-BR");}).forEach(function(s){
+    var avg=Math.round(s.total/s.count);
+    var minCls=s.min<10?"alert":s.min<20?"warn":"ok";
+    var alertBadge=s.min<10?'<span class="badge danger">Verificar '+esc(s.minColab.split(" ")[0])+"</span>"
+                  :s.min<20?'<span class="badge warn">Atenção</span>'
+                  :'<span class="badge ok">Normal</span>';
+    summaryRows+="<tr>"
+      +"<td>"+esc(s.nome)+"</td>"
+      +'<td class="r">'+s.count+"</td>"
+      +'<td class="r">'+avg+" dias</td>"
+      +'<td class="r"><span class="int '+minCls+'">'+s.min+" dias</span></td>"
+      +"<td>"+alertBadge+"</td>"
+      +"</tr>";
+  });
+  if(!summaryRows)summaryRows='<tr><td colspan="5" class="empty">Sem intervalos calculados no período.</td></tr>';
+
+  var unidTitulo=repUnidade==="geral"?"Todas as unidades":"Unidade "+repUnidade;
+  var domTitulo=dom==="safety"?"EPI / Safety":"Uniformes";
+  var saldoPeriodo=qtdEnt-qtdSai;
+  var saldoCls=saldoPeriodo>=0?"pos":"neg";
+  var saldoPfx=saldoPeriodo>=0?"+":"";
+
+  var html='<!DOCTYPE html><html lang="pt-BR"><head>'
+    +'<meta charset="UTF-8">'
+    +'<title>Relatório Formal — '+domTitulo+' — '+periodoLbl+'</title>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:"Segoe UI",Arial,Helvetica,sans-serif;font-size:12px;color:#1d2733;background:#fff;padding:24px}'
+    +'h1{font-size:17px;font-weight:800;color:#2D3277;margin-bottom:2px}'
+    +'h2{font-size:9.5px;font-weight:700;color:#5b6675;text-transform:uppercase;letter-spacing:.08em;margin:20px 0 7px;padding-bottom:5px;border-bottom:2px solid #e6ebf1}'
+    +'.meta{font-size:10.5px;color:#5b6675;margin-bottom:16px;line-height:1.7}'
+    +'.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #d3dae4;border-radius:6px;overflow:hidden;margin:12px 0 20px}'
+    +'.kpi{padding:13px 16px;border-right:1px solid #d3dae4}'
+    +'.kpi:last-child{border-right:none}'
+    +'.kpi-l{font-size:9.5px;color:#5b6675;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:700}'
+    +'.kpi-v{font-size:21px;font-weight:800;font-family:"Courier New",monospace}'
+    +'.kpi-v.pos{color:#1f9d55}.kpi-v.neg{color:#d23b30}.kpi-v.warn{color:#b8860b}.kpi-v.neutral{color:#2D3277}'
+    +'.kpi-s{font-size:10px;color:#8b94a3;margin-top:2px}'
+    +'.sec-label{font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#5b6675;padding:10px 0 6px;border-bottom:1.5px solid #d3dae4;margin-top:20px}'
+    +'.sec-meta{font-weight:400;letter-spacing:0;text-transform:none}'
+    +'table{width:100%;border-collapse:collapse;margin:8px 0 16px;font-size:11.5px}'
+    +'th{font-size:9px;font-weight:700;color:#fff;background:#2D3277;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;text-align:left}'
+    +'th.r{text-align:right}'
+    +'td{padding:6px 10px;border-bottom:1px solid #e6ebf1;vertical-align:middle}'
+    +'td.r{text-align:right;font-family:"Courier New",monospace;font-size:11px}'
+    +'td.pos{color:#1f9d55;font-weight:700;text-align:right;font-family:"Courier New",monospace}'
+    +'td.neg{color:#d23b30;font-weight:700;text-align:right;font-family:"Courier New",monospace}'
+    +'td.warn{color:#b8860b;font-weight:700;text-align:right;font-family:"Courier New",monospace}'
+    +'td.num{font-family:"Courier New",monospace;text-align:right}'
+    +'tr:nth-child(even) td{background:#fafbfd}'
+    +'tr.tot-row td{background:#eef1fa!important;font-weight:800;border-top:2px solid #b8bedd}'
+    +'.badge{display:inline-block;font-size:9.5px;padding:2px 7px;border-radius:3px;font-weight:700}'
+    +'.badge.ok{background:#e3f5ea;color:#155724}'
+    +'.badge.warn{background:#fdf3da;color:#856404}'
+    +'.badge.danger{background:#fbe5e3;color:#721c24}'
+    +'.int{display:inline-block;font-size:11px;padding:2px 7px;border-radius:3px;font-family:"Courier New",monospace;font-weight:700}'
+    +'.int.ok{background:#e3f5ea;color:#155724}'
+    +'.int.warn{background:#fdf3da;color:#856404}'
+    +'.int.alert{background:#fbe5e3;color:#721c24}'
+    +'.int.na{color:#8b94a3;font-weight:400}'
+    +'.empty{color:#8b94a3;font-style:italic;font-size:11px}'
+    +'.header{border-bottom:3px solid #FFE600;padding-bottom:12px;margin-bottom:8px;display:flex;align-items:flex-start;justify-content:space-between}'
+    +'.report-id{font-size:10px;color:#5b6675;text-align:right;line-height:1.6}'
+    +'.noprint{background:#2D3277;color:#fff;padding:10px 20px;margin:-24px -24px 24px;display:flex;align-items:center;gap:14px}'
+    +'.pbreak{page-break-before:always;margin-top:0}'
+    +'@media print{.noprint{display:none}.pbreak{page-break-before:always}'
+    +'h2{page-break-after:avoid}tr{page-break-inside:avoid}thead{display:table-header-group}}'
+    +'</style></head><body>'
+
+    // Toolbar (no-print)
+    +'<div class="noprint">'
+    +'<span style="flex:1;font-weight:700">Relatório Formal — '+domTitulo+'</span>'
+    +'<button onclick="window.print()" style="background:#FFE600;color:#2D3277;border:none;padding:7px 18px;font-weight:800;border-radius:4px;cursor:pointer;font-size:13px">&#128424; Imprimir / PDF</button>'
+    +'<button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px">Fechar</button>'
+    +'</div>'
+
+    // Report 1 header
+    +'<div class="header">'
+    +'<div><h1>Relatório de Controle de EPI</h1>'
+    +'<div class="meta">'+domTitulo+' &middot; '+unidTitulo+' &middot; '+esc(periodoLbl)+'</div></div>'
+    +'<div class="report-id"><b>Controle de Estoque SMG6</b><br>Mercado Livre<br>Gerado em '+now+'</div>'
+    +'</div>'
+
+    // KPIs
+    +'<div class="kpi-row">'
+    +'<div class="kpi"><div class="kpi-l">Entradas no período</div><div class="kpi-v pos">+'+qtdEnt+'</div><div class="kpi-s">'+ent.length+' lançamento(s) &middot; '+brl(valEnt)+'</div></div>'
+    +'<div class="kpi"><div class="kpi-l">Saídas no período</div><div class="kpi-v neg">−'+qtdSai+'</div><div class="kpi-s">'+sai.length+' registro(s)</div></div>'
+    +'<div class="kpi"><div class="kpi-l">Saldo do período</div><div class="kpi-v '+saldoCls+'">'+saldoPfx+saldoPeriodo+'</div><div class="kpi-s">ent. − saí.</div></div>'
+    +'<div class="kpi"><div class="kpi-l">Itens c/ estoque baixo</div><div class="kpi-v '+(lowStockCount>0?"warn":"neutral")+'">'+lowStockCount+'</div><div class="kpi-s">abaixo do mínimo</div></div>'
+    +'</div>'
+
+    // Entries
+    +'<h2>Entradas — '+esc(periodoLbl)+'</h2>'
+    +'<table><thead><tr>'
+    +'<th>Item / EPI</th><th>Tipo / Cor</th><th>Tamanho</th><th>Fornecedor / Origem</th><th>Data</th><th class="r">Qtd.</th><th class="r">Custo unit.</th>'
+    +'</tr></thead><tbody>'+entRows
+    +'<tr class="tot-row"><td colspan="5">Total de entradas</td><td class="pos r">+'+qtdEnt+'</td><td class="r">—</td></tr>'
+    +'</tbody></table>'
+
+    // Exits
+    +'<h2>Saídas — '+esc(periodoLbl)+'</h2>'
+    +'<table><thead><tr>'
+    +'<th>Item / EPI</th><th>Tipo / Cor</th><th>Tamanho</th><th>Colaborador</th><th>Liberado por</th><th>Data</th><th class="r">Qtd.</th>'
+    +'</tr></thead><tbody>'+saiRows
+    +'<tr class="tot-row"><td colspan="6">Total de saídas</td><td class="neg r">−'+qtdSai+'</td></tr>'
+    +'</tbody></table>'
+
+    // Balance
+    +'<h2>Saldo final por item</h2>'
+    +'<table><thead><tr>'
+    +'<th>Item / EPI</th><th>Un.</th><th class="r">Mín.</th><th class="r">Saldo anterior</th><th class="r">Entradas</th><th class="r">Saídas</th><th class="r">Saldo atual</th><th>Situação</th>'
+    +'</tr></thead><tbody>'+balRows+'</tbody></table>'
+
+    // Page break — Report 2
+    +'<div class="pbreak"></div>'
+
+    +'<div class="header" style="margin-top:16px">'
+    +'<div><h1>Relatório de Distribuição por Colaborador</h1>'
+    +'<div class="meta">'+domTitulo+' &middot; '+unidTitulo+' &middot; '+esc(periodoLbl)+'</div></div>'
+    +'<div class="report-id"><b>Controle de Estoque SMG6</b><br>Mercado Livre<br>Gerado em '+now+'</div>'
+    +'</div>'
+
+    +colabSections
+
+    // Interval summary
+    +'<h2>Resumo — Intervalos médios de troca por item</h2>'
+    +'<table><thead><tr>'
+    +'<th>Item / EPI</th><th class="r">Retiradas no período</th><th class="r">Intervalo médio</th><th class="r">Menor intervalo</th><th>Alerta</th>'
+    +'</tr></thead><tbody>'+summaryRows+'</tbody></table>'
+
+    +'<div style="margin-top:24px;padding-top:10px;border-top:1px solid #e6ebf1;font-size:10px;color:#8b94a3;display:flex;justify-content:space-between">'
+    +'<span>Controle de Estoque SMG6 — Mercado Livre</span>'
+    +'<span>Documento gerado automaticamente pelo sistema</span>'
+    +'</div>'
+
+    +'</body></html>';
+
+  var blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  var url=URL.createObjectURL(blob);
+  var win=window.open(url,"_blank");
+  if(!win)toast("Permita pop-ups para abrir o relatório formal.","warn");
+  setTimeout(function(){URL.revokeObjectURL(url);},60000);
+}
+
 
 /* ================= UI: TOAST + MODAL ================= */
 function toast(msg,type){
