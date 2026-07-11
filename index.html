@@ -360,6 +360,29 @@ function clearSession(){
   localStorage.removeItem("smg6_token");
   localStorage.removeItem("smg6_user");
 }
+/* ── Colaborador cache (localStorage) ──
+   Preserva campos extras (unidade, genero, etc.) caso o backend não os retorne */
+const COLAB_CACHE_KEY="smg6_colab_cache";
+function _colabCacheGet(){try{return JSON.parse(localStorage.getItem(COLAB_CACHE_KEY)||"{}")||{};}catch(e){return {};}}
+function _colabCacheSet(cache){try{localStorage.setItem(COLAB_CACHE_KEY,JSON.stringify(cache));}catch(e){}}
+function colabCacheSave(obj){if(!obj||!obj.id)return;var ch=_colabCacheGet();ch[obj.id]=obj;_colabCacheSet(ch);}
+function colabCacheMerge(arr){
+  var ch=_colabCacheGet();
+  // Mescla campos do cache nos objetos vindos do backend
+  var merged=arr.map(function(c){
+    var cached=ch[c.id];
+    if(!cached)return c;
+    // backend tem precedência para campos básicos, cache para campos extras (unidade/genero/turno)
+    return Object.assign({},cached,c);
+  });
+  // Adiciona colaboradores que estão no cache mas não vieram do backend
+  Object.keys(ch).forEach(function(id){
+    if(!merged.find(function(c){return c.id===id;})){
+      merged.push(ch[id]);
+    }
+  });
+  return merged;
+}
 function canEdit(){ const u=getUser(); return u&&(u.nivel==="admin"||u.nivel==="operador"); }
 function isAdmin(){ const u=getUser(); return u&&u.nivel==="admin"; }
 
@@ -645,7 +668,7 @@ async function loadAll(){
   PRODUTOS      = r.produtos      || [];
   MOVS          = r.movs          || [];
   DESLIGADOS    = r.desligados    || [];
-  COLABORADORES = r.colaboradores || [];
+  COLABORADORES = colabCacheMerge(r.colaboradores || []);
   driveSetStatus("ok");
   return true;
 }
@@ -1338,6 +1361,7 @@ function formCadastroColab(colab){
       if(!r.ok){toast("Erro: "+r.error,"erro");return;}
       if(isNew){COLABORADORES.push(obj);}
       else{var idx=COLABORADORES.findIndex(function(x){return x.id===obj.id;});if(idx>=0)COLABORADORES[idx]=obj;}
+      colabCacheSave(obj);
       closeModal();
       toast(isNew?"Colaborador cadastrado!":"Colaborador atualizado.","ok");
       state.colab=obj.nome;render();
@@ -1658,8 +1682,8 @@ function viewRel(){
       </div>`
     : "";
 
-  var genMasc=COLABORADORES.filter(function(x){return !x.desligado&&x.genero==="Masc.";}).length;
-  var genFem=COLABORADORES.filter(function(x){return !x.desligado&&x.genero==="Fem.";}).length;
+  var genMasc=COLABORADORES.filter(function(x){return !DESLIGADOS.includes(x.nome)&&x.genero==="Masc.";}).length;
+  var genFem=COLABORADORES.filter(function(x){return !DESLIGADOS.includes(x.nome)&&x.genero==="Fem.";}).length;
   var genTotal=(genMasc+genFem)||1;
   var pctM=Math.round(genMasc/genTotal*100);
   var pctF=Math.round(genFem/genTotal*100);
@@ -1738,6 +1762,7 @@ function viewRel(){
       <div class="scroll-y" style="max-height:520px">${barRows}</div>
     </div>
     ${estoqueTagRows}
+    ${tipoPanel}
     ${dom==="safety"?generoBlock:""}
     <div class="panel">
       <div class="panel-bar"><h3>Balanço do Período</h3></div>
@@ -2147,6 +2172,26 @@ function abrirRelatorioVisual(){
   // Colaboradores que retiraram no período
   const porColab={};
   sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
+  // Breakdown por tipo/cor
+  const porTipo={};
+  sai.forEach(function(s){
+    var p=PRODUTOS.find(function(x){return x.id===s.produtoId;});
+    var key=(p?p.descricao:"?")+(s.cor?" — "+s.cor:"");
+    porTipo[key]=(porTipo[key]||0)+s.qtd;
+  });
+  var tipoEntries=Object.entries(porTipo).sort(function(a,b){return b[1]-a[1];});
+  var tipoTbody=tipoEntries.map(function(e){
+    return '<tr><td style="font-size:12px;padding:4px 8px">'+esc(e[0])+'</td>'
+      +'<td style="text-align:right;font-family:var(--mono);font-weight:700;font-size:13px;padding:4px 8px">'+e[1]+'</td>'
+      +'</tr>';
+  }).join("");
+  var tipoPanel=tipoEntries.length?('<div class="panel" style="grid-column:1/-1">'
+    +'<div class="panel-bar"><h3>📋 Saídas por EPI / Tipo — '+esc(periodoLbl)+'</h3></div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr>'
+    +'<th style="text-align:left;font-size:10.5px;padding:6px 8px;border-bottom:2px solid var(--line);color:var(--txt-dim);letter-spacing:.05em;text-transform:uppercase">Item / Tipo</th>'
+    +'<th style="text-align:right;font-size:10.5px;padding:6px 8px;border-bottom:2px solid var(--line);color:var(--txt-dim);letter-spacing:.05em;text-transform:uppercase">Qtd. saídas</th>'
+    +'</tr></thead><tbody>'+tipoTbody+'</tbody></table></div></div>'):"";
 
   // Lista de produtos filtrados
   let prods=prodOf(dom);
@@ -3029,26 +3074,59 @@ function _wz_step1(prods,prefColab){
         disp=document.getElementById("ew_disp"),
         cp=document.getElementById("ew_colab"),
         da=document.getElementById("ew_data");
+    // Retorna tamanhos que aparecem em entradas de um produto+cor, ou todos se nenhum entrada
+    function tamsPorTipo(pr,corSel){
+      if(!pr||!pr.tamanhos||!pr.tamanhos.length)return[];
+      if(!corSel)return pr.tamanhos;
+      var entradas=MOVS.filter(function(m){
+        return m.produtoId===pr.id&&m.tipo==="entrada"&&(m.cor||"")===(corSel||"")&&m.tamanho;
+      });
+      if(!entradas.length)return pr.tamanhos; // sem dados: mostra todos
+      var found=[...new Set(entradas.map(function(m){return String(m.tamanho).trim();}))];
+      // Mantém a ordem original de pr.tamanhos
+      return pr.tamanhos.filter(function(t){return found.includes(String(t).trim());});
+    }
+    // Verifica se tipos têm conjuntos de tamanhos diferentes → tipo obrigatório
+    function tiposComTamsDiferentes(pr){
+      if(!pr||!pr.cores||pr.cores.length<2)return false;
+      var sets=pr.cores.map(function(cor){
+        return tamsPorTipo(pr,cor).join(",");
+      });
+      return sets.some(function(s){return s!==sets[0];});
+    }
+    function fillTams(pr,corSel){
+      ts.innerHTML='<option value="">&#8212;</option>';
+      if(!pr||!pr.tamanhos||!pr.tamanhos.length)return;
+      var tams=tamsPorTipo(pr,corSel);
+      tams.forEach(function(t){ts.innerHTML+='<option>'+esc(t)+'</option>';});
+      if(tams.length>0)ts.value=tams[0];
+    }
     function fill(){
       var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
-      ts.innerHTML='<option value="">&#8212;</option>';
-      if(pr&&pr.tamanhos&&pr.tamanhos.length){
-        pr.tamanhos.forEach(function(t){ts.innerHTML+='<option>'+esc(t)+'</option>';});
-        // Pré-seleciona o primeiro tamanho para exibir o saldo imediatamente
-        if(pr.tamanhos.length>0) ts.value=pr.tamanhos[0];
-      }
       // Preencher campo Tipo/Modelo se o produto tiver cores/tipos cadastrados
       var tipoWrap=document.getElementById("ew_tipo_wrap");
       var tipoSel=document.getElementById("ew_tipo");
+      var tipoLbl=tipoWrap?tipoWrap.querySelector("label"):null;
       if(tipoSel){
         tipoSel.innerHTML='<option value="">— nenhum —</option>';
         if(pr&&pr.cores&&pr.cores.length){
-          pr.cores.forEach(function(c){tipoSel.innerHTML+='<option>'+esc(c)+'</option>';});
+          pr.cores.forEach(function(cor){tipoSel.innerHTML+='<option>'+esc(cor)+'</option>';});
           if(tipoWrap)tipoWrap.style.display="";
+          // Marca como obrigatório se tipos têm tamanhos diferentes
+          var req=tiposComTamsDiferentes(pr);
+          if(tipoLbl){
+            tipoLbl.innerHTML=req
+              ?'Tipo / Modelo <span class="req">*</span>'
+              :'Tipo / Modelo <span style="font-size:10px;color:var(--txt-faint)">(opcional)</span>';
+          }
+          tipoSel._tipoObrigatorio=req;
         }else{
           if(tipoWrap)tipoWrap.style.display="none";
+          if(tipoSel)tipoSel._tipoObrigatorio=false;
         }
       }
+      var corSel=tipoSel?tipoSel.value:"";
+      fillTams(pr,corSel);
       upd();
     }
     function upd(){
@@ -3089,7 +3167,11 @@ function _wz_step1(prods,prefColab){
     if(ps)ps.onchange=fill;
     if(ts)ts.onchange=upd;
     var ewTipo=document.getElementById("ew_tipo");
-    if(ewTipo)ewTipo.onchange=upd;
+    if(ewTipo)ewTipo.onchange=function(){
+      var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
+      fillTams(pr,ewTipo.value);
+      upd();
+    };
     if(cp){
       cp.onchange=function(){
         chk();
@@ -3150,6 +3232,8 @@ function _wz_adicionarItem(){
   if(!qtd||qtd<=0){toast("Informe a quantidade","erro");return;}
   if(!motivo){toast("Selecione o motivo","erro");return;}
   if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
+  var tipoEl2=document.getElementById("ew_tipo");
+  if(tipoEl2&&tipoEl2._tipoObrigatorio&&!tipoModelo){toast("Selecione o Tipo / Modelo (obrigatório para este EPI)","erro");return;}
   // Calcula qtd já na lista para esse produto+tamanho
   var qtdNaLista=EPI_WZ.itens.filter(function(it){return it.prod===prod&&it.tam===tam;}).reduce(function(s,it){return s+it.qtd;},0);
   var saldo=tam?saldoVar(prod,tam,""):atual(prod);
@@ -3384,6 +3468,9 @@ function _wz_assinVazia(){
 
 async function _wz_finalizar(){
   if(_wz_assinVazia()){var err=document.getElementById("sig_err");if(err)err.textContent="Por favor, assine antes de confirmar.";return;}
+  // Desabilita botão para evitar duplo envio
+  var _btnConf=document.querySelector(".modal-footer .btn.green");
+  if(_btnConf){_btnConf.disabled=true;_btnConf.textContent="Salvando…";}
   var c=document.getElementById("sig_canvas");
   EPI_WZ.assinDataUrl=c?c.toDataURL("image/png"):null;
   var d=EPI_WZ.dados;
@@ -3418,7 +3505,12 @@ async function _wz_finalizar(){
     savedMovs.push({mov:wzMov,p:p,it:it,codigo:codigoValidacao});
     if(!firstMov)firstMov=wzMov;
   }
-  if(!savedMovs.length){toast("Nenhum item pôde ser salvo.","erro");return;}
+  if(!savedMovs.length){
+    toast("Nenhum item pôde ser salvo.","erro");
+    var _btnConf2=document.querySelector(".modal-footer .btn.green");
+    if(_btnConf2){_btnConf2.disabled=false;_btnConf2.textContent="✓ Confirmar e Gerar Comprovante";}
+    return;
+  }
   closeModal();
   toast(savedMovs.length===1
     ?"Entrega registrada: "+savedMovs[0].it.qtd+"× "+savedMovs[0].p.descricao+" → "+d.colab
