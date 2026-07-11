@@ -522,7 +522,18 @@ function selProd(){return PRODUTOS.find(p=>p.id===state.sel)||null;}
 function atual(pid){return movOf(pid).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
 function saldoVar(pid,tam,cor){return movOf(pid).filter(m=>String(m.tamanho||"").trim()===String(tam||"").trim()&&(cor===""||((m.cor||"")===(cor||"")))).reduce((s,m)=>s+(m.tipo==="entrada"?m.qtd:-m.qtd),0);}
 function saldoVarGen(pid,tam,cor,gen){var ms=movOf(pid).filter(function(m){return String(m.tamanho||"").trim()===String(tam||"").trim()&&(cor===""||((m.cor||"")===(cor||"")));});if(gen&&gen!=="Unissex"){ms=ms.filter(function(m){var mg=m.genero||"Unissex";return mg==="Unissex"||mg===gen;});}return ms.reduce(function(s,m){return s+(m.tipo==="entrada"?m.qtd:-m.qtd);},0);}
-function custoUnit(pid){const e=movOf(pid).filter(m=>m.tipo==="entrada"&&m.custoUnit>0);return e.length?e[e.length-1].custoUnit:0;}
+function custoUnit(pid){
+  var e=movOf(pid).filter(function(m){return m.tipo==="entrada"&&(m.custoUnit||0)>0;});
+  if(!e.length)return 0;
+  var totalVal=e.reduce(function(s,m){return s+m.qtd*(m.custoUnit||0);},0);
+  var totalQty=e.reduce(function(s,m){return s+m.qtd;},0);
+  return totalQty>0?totalVal/totalQty:0;
+}
+/* Custo total efetivo pago nas entradas (não multiplica qty atual × custo médio) */
+function custoTotalEntradas(pid){
+  return movOf(pid).filter(function(m){return m.tipo==="entrada"&&(m.custoUnit||0)>0;})
+    .reduce(function(s,m){return s+m.qtd*(m.custoUnit||0);},0);
+}
 function caAtualProduto(pid){
   if(!pid)return"";
   var ents=movOf(pid).filter(function(m){return m.tipo==="entrada";})
@@ -1072,7 +1083,7 @@ function viewEstoque(){
       <div class="tot"><span class="l">Produto</span><span class="v">${esc(sel.descricao)}</span></div>
       <div class="tot"><span class="l">Quantidade Total</span><span class="v ${at<=0?'red':''}">${at}</span></div>
       <div class="tot"><span class="l">Disponível</span><span class="v green">${at}</span></div>
-      <div class="tot"><span class="l">Custo Total do Estoque</span><span class="v blue">${brl(at*cu)}</span></div>
+      <div class="tot"><span class="l">Custo Total do Estoque</span><span class="v blue">${brl(custoTotalEntradas(sel.id))}</span></div>
       <div class="tot"><span class="l">Custo Atual da Unidade</span><span class="v">${brl(cu)}</span></div></div>`;
   }else{
     // Mostrar todos itens com saldo
@@ -1185,11 +1196,12 @@ function viewColabList(){
 
   // Stats movimentações por colaborador
   const statsMap={};
-  MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom).forEach(m=>{
-    const k=m.parte;if(!k)return;
-    if(!statsMap[k])statsMap[k]={itens:0,reg:0,ultima:null};
-    statsMap[k].itens+=m.qtd;statsMap[k].reg++;
-    if(!statsMap[k].ultima||m.data>statsMap[k].ultima)statsMap[k].ultima=m.data;
+  MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom).forEach(function(m){
+    if(!m.parte)return;
+    var _sk=(m.parte).toLowerCase(); // chave case-insensitive
+    if(!statsMap[_sk])statsMap[_sk]={itens:0,reg:0,ultima:null,_nome:m.parte};
+    statsMap[_sk].itens+=m.qtd;statsMap[_sk].reg++;
+    if(!statsMap[_sk].ultima||m.data>statsMap[_sk].ultima)statsMap[_sk].ultima=m.data;
   });
 
   const colabSel=state.colab||"";
@@ -1208,8 +1220,8 @@ function viewColabList(){
   </div>`;
 
   if(colabSel && ativos.includes(colabSel)){
-    const stats=statsMap[colabSel]||{itens:0,reg:0,ultima:null};
-    const reg=MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom&&m.parte===colabSel).sort((a,b)=>b.data>a.data?1:-1);
+    const stats=statsMap[(colabSel||"").toLowerCase()]||{itens:0,reg:0,ultima:null};
+    const _colabSelLc=(colabSel||"").toLowerCase();const reg=MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom&&(m.parte||"").toLowerCase()===_colabSelLc).sort((a,b)=>b.data>a.data?1:-1);
     const total=reg.reduce((s,r)=>s+r.qtd,0);
     const porProd={};
     reg.forEach(r=>{const p=PRODUTOS.find(x=>x.id===r.produtoId);const n=p?p.descricao:r.produtoId;porProd[n]=(porProd[n]||0)+r.qtd;});
@@ -1263,7 +1275,7 @@ function viewDesligados(){
   const histSel=state.histColab||"";
 
   if(histSel && todos.includes(histSel)){
-    const reg=MOVS.filter(m=>m.tipo==="saida"&&m.parte===histSel).sort((a,b)=>b.data>a.data?1:-1);
+    const _histSelLc=(histSel||"").toLowerCase();const reg=MOVS.filter(m=>m.tipo==="saida"&&(m.parte||"").toLowerCase()===_histSelLc).sort((a,b)=>b.data>a.data?1:-1);
     const total=reg.reduce((s,r)=>s+r.qtd,0);
     const porProd={};
     reg.forEach(r=>{const p=PRODUTOS.find(x=>x.id===r.produtoId);const n=p?p.descricao:r.produtoId;porProd[n]=(porProd[n]||0)+r.qtd;});
@@ -1294,7 +1306,7 @@ function viewDesligados(){
   const rows=todos.map(n=>`<tr>
     <td><b>${esc(n)}</b></td>
     <td><span class="chip desl">Desligado</span></td>
-    <td class="num">${MOVS.filter(m=>m.tipo==="saida"&&m.parte===n).length}</td>
+    <td class="num">${MOVS.filter(function(m){return m.tipo==="saida"&&(m.parte||"").toLowerCase()===(n||"").toLowerCase();}).length}</td>
     <td style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn ghost sm" onclick="state.histColab='${esc(n)}';render()">📋 Histórico</button>
       <button class="btn danger sm" onclick="excluirDesligado('${esc(n)}')">🗑 Excluir</button>
@@ -2145,7 +2157,7 @@ function viewDashboard(){
   const motivos=agregarMotivos(dom,start,end);
   const compras=previsaoCompra(dom,30).filter(x=>x.necessidade>0).sort((a,b)=>b.necessidade-a.necessidade);
   const ca=statusCA(dom);
-  const custoTotal=prodOf(dom).reduce((s,p)=>s+atual(p.id)*custoUnit(p.id),0);
+  const custoTotal=prodOf(dom).reduce((s,p)=>s+custoTotalEntradas(p.id),0);
   const itensEstoque=prodOf(dom).reduce((s,p)=>s+atual(p.id),0);
   const compraRows=compras.slice(0,12).map(c=>`<tr>
     <td class="nm">${esc(c.p.descricao)}</td>
@@ -2539,9 +2551,10 @@ function abrirRelatorioFormal(){
       var p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
       if(!p)return;
 
-      // Find most recent previous withdrawal of same product by same person
+      // Find most recent previous withdrawal of same product by same person (case-insensitive)
+      var _nomeLc=(nome||"").toLowerCase();
       var prevMovs=MOVS.filter(function(x){
-        return x.parte===nome&&x.produtoId===m.produtoId&&x.tipo==="saida"&&x.data<m.data;
+        return (x.parte||"").toLowerCase()===_nomeLc&&x.produtoId===m.produtoId&&x.tipo==="saida"&&x.data<m.data;
       }).sort(function(a,b){return b.data.localeCompare(a.data);});
 
       var intervalHtml='<span class="int na">—</span>';
