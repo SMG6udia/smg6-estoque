@@ -381,6 +381,16 @@ function colabCacheMerge(arr){
       merged.push(ch[id]);
     }
   });
+  // Deduplicar por nome (case-insensitive): mantém o mais completo (com unidade/genero)
+  var seen={};
+  merged=merged.filter(function(x){
+    var key=(x.nome||"").toLowerCase();
+    if(!seen[key]){seen[key]=x;return true;}
+    // Se o já registrado tem menos campos, substitui
+    var prev=seen[key];
+    if((x.unidade||x.genero)&&!(prev.unidade||prev.genero)){seen[key]=x;return true;}
+    return false;
+  });
   return merged;
 }
 function canEdit(){ const u=getUser(); return u&&(u.nivel==="admin"||u.nivel==="operador"); }
@@ -555,7 +565,11 @@ function colabListaAtivos(dom,unidade,turno){
   const fromMovs=[...new Set(MOVS.filter(m=>m.tipo==="saida"&&m.dom===dom).map(m=>m.parte))].filter(Boolean);
   const fromPlanilha=dom==="safety"?COLAB_PLANILHA_ATIVOS:[];
   const base=fromSheets.length>0?fromSheets:[...new Set([...fromPlanilha,...fromMovs])];
-  let lista=[...new Set(base)].filter(n=>!DESLIGADOS.includes(n));
+  // Deduplicar por nome normalizado (case-insensitive): mantém versão corretamente capitalizada
+  var _seenNames={};
+  var _deduped=[];
+  base.forEach(function(n){var k=(n||"").toLowerCase();if(!_seenNames[k]){_seenNames[k]=n;_deduped.push(n);}});
+  let lista=_deduped.filter(n=>!DESLIGADOS.some(d=>d.toLowerCase()===n.toLowerCase()));
   if(unidade){lista=lista.filter(function(n){return colabUnidadeOf(n)===unidade;});}
   if(unidade==="SMG6"&&turno){lista=lista.filter(function(n){return colabTurnoOf(n)===turno;});}
   return lista.sort((a,b)=>a.localeCompare(b,"pt-BR"));
@@ -1357,11 +1371,33 @@ function formCadastroColab(colab){
         tamColete:(document.getElementById("cc_colete")||{}).value||"",
         ativo:true
       };
-      var r=await api("saveColaborador",{colaborador:obj,isNew:isNew});
+      var _oldNome=(!isNew&&c.nome)?c.nome:"";
+      var r=await api("saveColaborador",{colaborador:obj,isNew:isNew,oldNome:_oldNome});
       if(!r.ok){toast("Erro: "+r.error,"erro");return;}
       if(isNew){COLABORADORES.push(obj);}
-      else{var idx=COLABORADORES.findIndex(function(x){return x.id===obj.id;});if(idx>=0)COLABORADORES[idx]=obj;}
+      else{
+        // Remove versão antiga (por id OU nome antigo, para caso o backend tenha duplicado)
+        COLABORADORES=COLABORADORES.filter(function(x){
+          return x.id===obj.id||(x.nome.toLowerCase()!==(_oldNome||"").toLowerCase()&&x.id!==obj.id);
+        });
+        var idx=COLABORADORES.findIndex(function(x){return x.id===obj.id;});
+        if(idx>=0){COLABORADORES[idx]=obj;}else{COLABORADORES.push(obj);}
+        // Atualiza referências nos MOVS (case-insensitive)
+        if(_oldNome&&_oldNome.toLowerCase()!==obj.nome.toLowerCase()){
+          MOVS.forEach(function(m){if(m.parte&&m.parte.toLowerCase()===_oldNome.toLowerCase())m.parte=obj.nome;});
+        }
+      }
       colabCacheSave(obj);
+      // Remove versão antiga do cache
+      if(!isNew&&_oldNome){
+        var _ch=_colabCacheGet();
+        Object.keys(_ch).forEach(function(id){
+          if(_ch[id].nome&&_ch[id].nome.toLowerCase()===_oldNome.toLowerCase()&&id!==obj.id){
+            delete _ch[id];
+          }
+        });
+        _colabCacheSet(_ch);
+      }
       closeModal();
       toast(isNew?"Colaborador cadastrado!":"Colaborador atualizado.","ok");
       state.colab=obj.nome;render();
@@ -1387,6 +1423,7 @@ function formCadastroColab(colab){
 }
 
 async function desligarColab(nome){
+  if(!isAdmin()){toast("Apenas administradores podem desligar colaboradores","erro");return;}
   const ok=await confirmModal("Desligar Colaborador",`Mover <b>${esc(nome)}</b> para a lista de desligados? O histórico será preservado.`,"Desligar");
   if(!ok)return;
   if(!DESLIGADOS.includes(nome)){DESLIGADOS.push(nome);}
@@ -1488,6 +1525,23 @@ function viewRel(){
     ent=[];valEnt=0;qtdEnt=0;
   }
   const porColab={};sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
+  // Painel: saídas por EPI / Tipo
+  var _porTipo={};
+  sai.forEach(function(s){
+    var _p2=PRODUTOS.find(function(x){return x.id===s.produtoId;});
+    var _key=(_p2?_p2.descricao:"?")+(s.cor?" — "+s.cor:"");
+    _porTipo[_key]=(_porTipo[_key]||0)+s.qtd;
+  });
+  var _tipoEntries=Object.entries(_porTipo).sort(function(a,b){return b[1]-a[1];});
+  var tipoPanel=_tipoEntries.length?('<div class="panel" style="grid-column:1/-1">'
+    +'<div class="panel-bar"><h3>&#128203; Saídas por EPI / Tipo — '+periodoLbl+'</h3></div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr>'
+    +'<th style="text-align:left;font-size:10.5px;padding:6px 8px;border-bottom:2px solid var(--line);color:var(--txt-dim);text-transform:uppercase;letter-spacing:.05em">Item / Tipo</th>'
+    +'<th style="text-align:right;font-size:10.5px;padding:6px 8px;border-bottom:2px solid var(--line);color:var(--txt-dim);text-transform:uppercase;letter-spacing:.05em">Qtd. saídas</th>'
+    +'</tr></thead><tbody>'
+    +_tipoEntries.map(function(e){return '<tr><td style="font-size:12px;padding:5px 8px">'+esc(e[0])+'</td><td style="text-align:right;font-family:var(--mono);font-weight:700;font-size:13px;padding:5px 8px">'+e[1]+'</td></tr>';}).join("")
+    +'</tbody></table></div></div>'):"";
 
   // ----- Linhas por item (com saldo inicial/entradas/saídas/saldo final) -----
   const busca=(state.repBusca||"").trim().toLowerCase();
@@ -2172,26 +2226,7 @@ function abrirRelatorioVisual(){
   // Colaboradores que retiraram no período
   const porColab={};
   sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
-  // Breakdown por tipo/cor
-  const porTipo={};
-  sai.forEach(function(s){
-    var p=PRODUTOS.find(function(x){return x.id===s.produtoId;});
-    var key=(p?p.descricao:"?")+(s.cor?" — "+s.cor:"");
-    porTipo[key]=(porTipo[key]||0)+s.qtd;
-  });
-  var tipoEntries=Object.entries(porTipo).sort(function(a,b){return b[1]-a[1];});
-  var tipoTbody=tipoEntries.map(function(e){
-    return '<tr><td style="font-size:12px;padding:4px 8px">'+esc(e[0])+'</td>'
-      +'<td style="text-align:right;font-family:var(--mono);font-weight:700;font-size:13px;padding:4px 8px">'+e[1]+'</td>'
-      +'</tr>';
-  }).join("");
-  var tipoPanel=tipoEntries.length?('<div class="panel" style="grid-column:1/-1">'
-    +'<div class="panel-bar"><h3>📋 Saídas por EPI / Tipo — '+esc(periodoLbl)+'</h3></div>'
-    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr>'
-    +'<th style="text-align:left;font-size:10.5px;padding:6px 8px;border-bottom:2px solid var(--line);color:var(--txt-dim);letter-spacing:.05em;text-transform:uppercase">Item / Tipo</th>'
-    +'<th style="text-align:right;font-size:10.5px;padding:6px 8px;border-bottom:2px solid var(--line);color:var(--txt-dim);letter-spacing:.05em;text-transform:uppercase">Qtd. saídas</th>'
-    +'</tr></thead><tbody>'+tipoTbody+'</tbody></table></div></div>'):"";
+  
 
   // Lista de produtos filtrados
   let prods=prodOf(dom);
