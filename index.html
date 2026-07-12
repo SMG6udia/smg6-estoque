@@ -485,6 +485,18 @@ let COLAB_PLANILHA_DESLIGADOS=[
   "Janderson Crispim da Silva","Maikon Wisney Gonçalves da Silva","Priscillane Pereira da Silva",
   "Wesley Ferreira Costa"
 ];
+/* Exclusão local de desligados (persiste no browser para contornar lista hardcoded) */
+const DESL_EXCL_KEY="smg6_desl_excluidos";
+function deslExclGet(){try{return JSON.parse(localStorage.getItem(DESL_EXCL_KEY)||"[]");}catch(e){return[];}}
+function deslExclAdd(nome){var l=deslExclGet();if(!l.some(function(n){return n.toLowerCase()===(nome||"").toLowerCase();})){l.push(nome);try{localStorage.setItem(DESL_EXCL_KEY,JSON.stringify(l));}catch(e){}}}
+/* Aplica exclusão local ao carregar a página */
+function aplicarExclusoesLocaisDesl(){
+  var excl=deslExclGet();
+  if(!excl.length)return;
+  COLAB_PLANILHA_DESLIGADOS=COLAB_PLANILHA_DESLIGADOS.filter(function(n){
+    return !excl.some(function(e){return e.toLowerCase()===n.toLowerCase();});
+  });
+}
 
 /* ================= HELPERS ================= */
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -693,6 +705,7 @@ async function loadAll(){
   PRODUTOS      = r.produtos      || [];
   MOVS          = r.movs          || [];
   DESLIGADOS    = r.desligados    || [];
+  aplicarExclusoesLocaisDesl();
   COLABORADORES = colabCacheMerge(r.colaboradores || []);
   driveSetStatus("ok");
   return true;
@@ -1178,6 +1191,7 @@ function viewColabList(){
   const dom=state.dom;
   const btn=dom==="safety"?`<button class="btn primary sm" data-act="novaEntrega">＋ Nova Entrega de EPI</button>`:"";
   const btnCad=dom==="safety"?'<button class="btn ghost sm" onclick="formCadastroColab()">＋ Cadastrar Colaborador</button>':"";
+  const btnRelColab=dom==="safety"?'<button class="btn ghost sm" onclick="abrirRelatorioColaboradores()">&#128203; Relatório de Colaboradores</button>':"";
   const unidadeSel=dom==="safety"?(state.colabUnidade||"SMG6"):"";
   const turnoSel=dom==="safety"&&unidadeSel==="SMG6"?(state.colabTurno||"PM"):"";
   const ativos=colabListaAtivos(dom,unidadeSel||undefined,turnoSel||undefined);
@@ -1239,7 +1253,7 @@ function viewColabList(){
     const chips=Object.entries(porProd).sort((a,b)=>b[1]-a[1]).map(([p,q])=>`<span class="chip tam" style="margin:3px">${esc(p)}: <b>${q}</b></span>`).join("");
     const btnDesl=(dom==="safety"&&isAdmin())?`<button class="btn danger sm" onclick="desligarColab('${esc(colabSel)}')">⚠ Desligar Colaborador</button>`:"";
     return `<div class="panel">
-      <div class="panel-bar"><h3>Colaboradores · ${dom==="safety"?"Safety":"Insumos"}</h3><div class="right" style="gap:8px">${btnCad}${btn}</div></div>
+      <div class="panel-bar"><h3>Colaboradores · ${dom==="safety"?"Safety":"Insumos"}</h3><div class="right" style="gap:8px">${btnRelColab}${btnCad}${btn}</div></div>
       ${selectHtml}
       <div class="colab-det">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -1261,7 +1275,7 @@ function viewColabList(){
 
   // Sem colaborador selecionado
   return `<div class="panel">
-    <div class="panel-bar"><h3>Colaboradores · ${dom==="safety"?"Safety":"Insumos"}</h3><div class="right" style="gap:8px">${btnCad}${btn}</div></div>
+    <div class="panel-bar"><h3>Colaboradores · ${dom==="safety"?"Safety":"Insumos"}</h3><div class="right" style="gap:8px">${btnRelColab}${btnCad}${btn}</div></div>
     ${selectHtml}
     <div class="empty"><div class="big">☻</div>Selecione um colaborador para ver o relatório.</div>
   </div>`;
@@ -1269,9 +1283,119 @@ function viewColabList(){
 
 function viewColabDet(){return viewColabList();}
 
+function abrirRelatorioColaboradores(){
+  var now=new Date().toLocaleString("pt-BR");
+  var allColabs=COLABORADORES.filter(function(x){
+    return !DESLIGADOS.some(function(d){return d.toLowerCase()===(x.nome||"").toLowerCase();})
+      && x.ativo!==false;
+  }).slice().sort(function(a,b){return (a.nome||"").localeCompare(b.nome||"","pt-BR");});
+
+  // Grupos
+  var smg6am=allColabs.filter(function(x){return (x.unidade||"SMG6")==="SMG6"&&(x.turno||"PM")==="AM";});
+  var smg6pm=allColabs.filter(function(x){return (x.unidade||"SMG6")==="SMG6"&&(x.turno||"PM")==="PM";});
+  var xmg2  =allColabs.filter(function(x){return x.unidade==="XMG2";});
+
+  function mascaraCPF(cpf){
+    var d=(cpf||"").replace(/\D/g,"");
+    if(d.length===11)return d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6,9)+"-"+d.slice(9);
+    return cpf||"—";
+  }
+  function tamRow(c){
+    var ts=[
+      c.tamCamisa?"Camisa "+c.tamCamisa:"",
+      c.tamCalca?"Calça "+c.tamCalca:"",
+      c.tamBermuda?"Bermuda "+c.tamBermuda:"",
+      c.tamBota?"Bota "+c.tamBota:"",
+      c.tamBlusa?"Blusa "+c.tamBlusa:"",
+      c.tamColete?"Colete "+c.tamColete:""
+    ].filter(Boolean);
+    return ts.length?ts.join(", "):"—";
+  }
+  function buildRows(list){
+    if(!list.length)return '<tr><td colspan="6" class="empty">Nenhum colaborador neste grupo.</td></tr>';
+    return list.map(function(c,i){
+      return '<tr>'
+        +'<td class="n">'+(i+1)+'</td>'
+        +'<td><b>'+esc(c.nome||"")+'</b></td>'
+        +'<td>'+mascaraCPF(c.cpf)+'</td>'
+        +'<td>'+esc(c.genero||"—")+'</td>'
+        +'<td>'+esc(c.contato||"—")+'</td>'
+        +'<td style="font-size:10.5px">'+esc(tamRow(c))+'</td>'
+        +'</tr>';
+    }).join("");
+  }
+  function buildSection(titulo,list){
+    return '<div class="sec-title">'+titulo+' <span class="cnt">('+list.length+' colaborador'+(list.length===1?'':'es')+')</span></div>'
+      +'<table><thead><tr>'
+      +'<th class="n">#</th><th>Nome completo</th><th>CPF</th><th>Gênero</th><th>Contato</th><th>Tamanhos</th>'
+      +'</tr></thead><tbody>'+buildRows(list)+'</tbody></table>';
+  }
+
+  var html='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
+    +'<title>Relatório de Colaboradores — SMG6</title>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1d2733;background:#fff;padding:24px}'
+    +'.noprint{background:#2D3277;color:#fff;padding:10px 20px;margin:-24px -24px 24px;display:flex;align-items:center;gap:14px}'
+    +'.header{border-bottom:3px solid #FFE600;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start}'
+    +'.header h1{font-size:17px;font-weight:800;color:#2D3277}'
+    +'.header .meta{font-size:10.5px;color:#5b6675;text-align:right;line-height:1.7}'
+    +'.sec-title{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#5b6675;padding:10px 0 6px;border-bottom:2px solid #e6ebf1;margin:18px 0 0}'
+    +'.cnt{font-weight:400;text-transform:none;letter-spacing:0}'
+    +'table{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:11.5px}'
+    +'th{background:#2D3277;color:#fff;padding:7px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;text-align:left;font-weight:700}'
+    +'th.n{width:36px;text-align:right}'
+    +'td{padding:6px 10px;border-bottom:1px solid #e6ebf1;vertical-align:middle}'
+    +'td.n{text-align:right;color:#8b94a3;font-size:11px}'
+    +'tr:nth-child(even) td{background:#fafbfd}'
+    +'.empty{color:#8b94a3;font-style:italic;font-size:11px;text-align:center;padding:12px}'
+    +'.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #d3dae4;border-radius:6px;overflow:hidden;margin:0 0 20px}'
+    +'.kpi{padding:12px 16px;border-right:1px solid #d3dae4}'
+    +'.kpi:last-child{border-right:none}'
+    +'.kpi-l{font-size:9.5px;color:#5b6675;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;font-weight:700}'
+    +'.kpi-v{font-size:22px;font-weight:800;color:#2D3277;font-family:"Courier New",monospace}'
+    +'@media print{.noprint{display:none}body{padding:12px}tr{page-break-inside:avoid}thead{display:table-header-group}}'
+    +'</style></head><body>'
+    +'<div class="noprint">'
+    +'<span style="flex:1;font-weight:700">Relatório de Colaboradores Cadastrados</span>'
+    +'<button onclick="window.print()" style="background:#FFE600;color:#2D3277;border:none;padding:7px 18px;font-weight:800;border-radius:4px;cursor:pointer;font-size:13px">&#128424; Imprimir / PDF</button>'
+    +'<button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:7px 14px;border-radius:4px;cursor:pointer">Fechar</button>'
+    +'</div>'
+    +'<div class="header">'
+    +'<div><h1>Relatório de Colaboradores Cadastrados</h1>'
+    +'<div style="font-size:11px;color:#5b6675;margin-top:2px">Controle de Estoque SMG6 — Mercado Livre</div></div>'
+    +'<div class="meta"><b>Data de emissão:</b> '+now+'<br>'
+    +'<b>Total cadastrados:</b> '+allColabs.length+'</div>'
+    +'</div>'
+    +'<div class="kpi-row">'
+    +'<div class="kpi"><div class="kpi-l">Total</div><div class="kpi-v">'+allColabs.length+'</div></div>'
+    +'<div class="kpi"><div class="kpi-l">SMG6 AM</div><div class="kpi-v">'+smg6am.length+'</div></div>'
+    +'<div class="kpi"><div class="kpi-l">SMG6 PM</div><div class="kpi-v">'+smg6pm.length+'</div></div>'
+    +'<div class="kpi"><div class="kpi-l">XMG2</div><div class="kpi-v">'+xmg2.length+'</div></div>'
+    +'</div>'
+    +buildSection("SMG6 — Turno AM",smg6am)
+    +buildSection("SMG6 — Turno PM",smg6pm)
+    +buildSection("XMG2",xmg2)
+    +'<div style="margin-top:24px;padding-top:10px;border-top:1px solid #e6ebf1;font-size:10px;color:#8b94a3;display:flex;justify-content:space-between">'
+    +'<span>Controle de Estoque SMG6 — Mercado Livre</span>'
+    +'<span>Documento gerado automaticamente pelo sistema</span>'
+    +'</div>'
+    +'</body></html>';
+
+  var blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  var url=URL.createObjectURL(blob);
+  var win=window.open(url,"_blank");
+  if(!win)toast("Permita pop-ups para abrir o relatório.","warn");
+  setTimeout(function(){URL.revokeObjectURL(url);},60000);
+}
+
+
 /* ================= DESLIGADOS ================= */
 function viewDesligados(){
-  const todos=[...new Set([...COLAB_PLANILHA_DESLIGADOS,...DESLIGADOS])].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  var _deslExcl=deslExclGet();
+  const todos=[...new Set([...COLAB_PLANILHA_DESLIGADOS,...DESLIGADOS])]
+    .filter(function(n){return !_deslExcl.some(function(e){return e.toLowerCase()===n.toLowerCase();});})
+    .sort((a,b)=>a.localeCompare(b,"pt-BR"));
   const histSel=state.histColab||"";
 
   if(histSel && todos.includes(histSel)){
@@ -1453,8 +1577,9 @@ async function excluirDesligado(nome){
   if(!ok)return;
   const r=await api("saveDesligado",{nome,acao:"excluir"});
   if(!r.ok){toast("Erro ao excluir: "+r.error,"erro");return;}
-  DESLIGADOS=DESLIGADOS.filter(d=>d!==nome);
-  COLAB_PLANILHA_DESLIGADOS=(COLAB_PLANILHA_DESLIGADOS||[]).filter(d=>d!==nome);
+  DESLIGADOS=DESLIGADOS.filter(function(d){return d.toLowerCase()!==(nome||"").toLowerCase();});
+  COLAB_PLANILHA_DESLIGADOS=(COLAB_PLANILHA_DESLIGADOS||[]).filter(function(d){return d.toLowerCase()!==(nome||"").toLowerCase();});
+  deslExclAdd(nome); // persiste no localStorage para sobreviver ao reload
   toast(nome+" removido da lista de desligados.","ok");
   render();
 }
