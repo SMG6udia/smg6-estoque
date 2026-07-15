@@ -372,8 +372,12 @@ function colabCacheMerge(arr){
   var merged=arr.map(function(c){
     var cached=ch[c.id];
     if(!cached)return c;
-    // backend tem precedência para campos básicos, cache para campos extras (unidade/genero/turno)
-    return Object.assign({},cached,c);
+    // backend tem precedência para campos básicos, mas preserva campos extras do cache se backend não os tem
+    var m=Object.assign({},cached,c);
+    if(!c.unidade&&cached.unidade)m.unidade=cached.unidade;
+    if(!c.genero&&cached.genero)m.genero=cached.genero;
+    if(!c.turno&&cached.turno)m.turno=cached.turno;
+    return m;
   });
   // Adiciona colaboradores que estão no cache mas não vieram do backend
   Object.keys(ch).forEach(function(id){
@@ -381,17 +385,22 @@ function colabCacheMerge(arr){
       merged.push(ch[id]);
     }
   });
-  // Deduplicar por nome (case-insensitive): mantém o mais completo (com unidade/genero)
-  var seen={};
-  merged=merged.filter(function(x){
+  // Deduplicar por nome (case-insensitive): substitui in-place pelo mais completo
+  var seenMap={};
+  var result=[];
+  merged.forEach(function(x){
     var key=(x.nome||"").toLowerCase();
-    if(!seen[key]){seen[key]=x;return true;}
-    // Se o já registrado tem menos campos, substitui
-    var prev=seen[key];
-    if((x.unidade||x.genero)&&!(prev.unidade||prev.genero)){seen[key]=x;return true;}
-    return false;
+    if(seenMap[key]===undefined){
+      seenMap[key]=result.length;
+      result.push(x);
+    } else {
+      var prev=result[seenMap[key]];
+      if((x.unidade||x.genero||x.turno)&&!(prev.unidade||prev.genero||prev.turno)){
+        result[seenMap[key]]=x; // substitui in-place pelo mais completo
+      }
+    }
   });
-  return merged;
+  return result;
 }
 function canEdit(){ const u=getUser(); return u&&(u.nivel==="admin"||u.nivel==="operador"); }
 function isAdmin(){ const u=getUser(); return u&&u.nivel==="admin"; }
@@ -569,17 +578,20 @@ function mascaraTelefone(v){
   return"";
 }
 function colabGeneroOf(nome){
-  const c=COLABORADORES.find(function(x){return x.nome===nome;});
+  var _nl=(nome||"").toLowerCase();
+  const c=COLABORADORES.find(function(x){return (x.nome||"").toLowerCase()===_nl;});
   return (c&&c.genero)?c.genero:null;
 }
 function colabUnidadeOf(nome){
-  const c=COLABORADORES.find(function(x){return x.nome===nome;});
+  var _nl=(nome||"").toLowerCase();
+  const c=COLABORADORES.find(function(x){return (x.nome||"").toLowerCase()===_nl;});
   if(c&&c.unidade)return c.unidade;
   // colaboradores sem unidade cadastrada = SMG6 (padrão histórico)
   return "SMG6";
 }
 function colabTurnoOf(nome){
-  const c=COLABORADORES.find(function(x){return x.nome===nome;});
+  var _nl=(nome||"").toLowerCase();
+  const c=COLABORADORES.find(function(x){return (x.nome||"").toLowerCase()===_nl;});
   if(c&&c.turno)return c.turno;
   return "AM"; // padrão histórico
 }
@@ -3202,11 +3214,8 @@ function _wz_steps(ativo){
 /* ── ETAPA 1 · Dados da Entrega ── */
 function _wz_step1(prods,prefColab){
   var colabList=colabListaAtivos("safety");
-  var colabOpts='<option value="">— selecione —</option>';
-  for(var i=0;i<colabList.length;i++){
-    var c=colabList[i];
-    colabOpts+='<option value="'+esc(c)+'"'+(prefColab&&c===prefColab?' selected':'')+'>'+esc(c)+'</option>';
-  }
+  var colabDataOpts='';
+  colabList.forEach(function(n){colabDataOpts+='<option value="'+esc(n)+'"></option>';});
   var prodOpts='<option value="">— selecione —</option>';
   for(var j=0;j<prods.length;j++){
     prodOpts+='<option value="'+prods[j].id+'">'+esc(prods[j].descricao)+'</option>';
@@ -3215,8 +3224,9 @@ function _wz_step1(prods,prefColab){
     +'<div id="movAlert"></div>'
     +'<div class="mgrid">'
     +'<div class="mfield"><label>Data <span class="req">*</span></label><input type="date" id="ew_data" value="'+today()+'"></div>'
-    +'<div class="mfield"><label>Liberado por <span class="req">*</span></label><input id="ew_lib" placeholder="Respons&aacute;vel pela entrega"></div>'
-    +'<div class="mfield full"><label>Colaborador (recebe) <span class="req">*</span></label><select id="ew_colab">'+colabOpts+'</select></div>'
+    +'<div class="mfield"><label>Liberado por <span class="req">*</span></label><select id="ew_lib"><option value="">— selecione —</option></select></div>'
+    +'<div class="mfield"><label>Unidade</label><select id="ew_unidade"><option value="">— todas —</option><option value="SMG6_AM">SMG6 AM</option><option value="SMG6_PM">SMG6 PM</option><option value="XMG2">XMG2</option></select></div>'
+    +'<div class="mfield full"><label>Colaborador (recebe) <span class="req">*</span></label><input list="ew_colab_list" id="ew_colab" placeholder="Digite ou selecione..." value="'+esc(prefColab||'')+'"><datalist id="ew_colab_list">'+colabDataOpts+'</datalist></div>'
     +'</div>'
     +'<div style="margin:14px 0 4px;font-size:11.5px;font-weight:700;color:var(--txt-dim);text-transform:uppercase;letter-spacing:.07em">EPIs a entregar</div>'
     +'<div id="ew_lista_itens" style="min-height:40px;border:1.5px dashed var(--line);border-radius:8px;padding:8px 10px;margin-bottom:12px">'
@@ -3246,7 +3256,57 @@ function _wz_step1(prods,prefColab){
         ts=document.getElementById("ew_tam"),
         disp=document.getElementById("ew_disp"),
         cp=document.getElementById("ew_colab"),
-        da=document.getElementById("ew_data");
+        da=document.getElementById("ew_data"),
+        eu=document.getElementById("ew_unidade"),
+        elib=document.getElementById("ew_lib");
+    // Populate Liberado Por with admin+operador users
+    function _populateLib(){
+      if(!elib)return;
+      var users=Object.values(_uCache).filter(function(u){return u.nivel==="admin"||u.nivel==="operador";});
+      var curUser=getUser();
+      if(users.length>0){
+        elib.innerHTML='<option value="">— selecione —</option>';
+        users.forEach(function(u){
+          var n=u.nome||u.email;
+          elib.innerHTML+='<option value="'+esc(n)+'"'+( curUser&&(curUser.nome===n||curUser.email===u.email)?' selected':'')+'>'+esc(n)+'</option>';
+        });
+      } else {
+        api("getUsuarios",null).then(function(r){
+          if(r&&r.ok&&r.data){
+            elib.innerHTML='<option value="">— selecione —</option>';
+            r.data.filter(function(u){return u.nivel==="admin"||u.nivel==="operador";}).forEach(function(u){
+              _uCache[u.email]=u;
+              var n=u.nome||u.email;
+              elib.innerHTML+='<option value="'+esc(n)+'">'+esc(n)+'</option>';
+            });
+            // pre-select current user
+            var cu=getUser();
+            if(cu&&elib){
+              Array.from(elib.options).forEach(function(o){
+                if(o.value===(cu.nome||cu.email))o.selected=true;
+              });
+            }
+          }
+        });
+      }
+    }
+    _populateLib();
+    // Refresh collaborator datalist based on selected unit/shift
+    function _refreshColabList(){
+      var dl=document.getElementById("ew_colab_list");
+      if(!dl)return;
+      var uval=eu?eu.value:"";
+      var unidade="",turno="";
+      if(uval==="SMG6_AM"){unidade="SMG6";turno="AM";}
+      else if(uval==="SMG6_PM"){unidade="SMG6";turno="PM";}
+      else if(uval==="XMG2"){unidade="XMG2";}
+      var list=unidade?colabListaAtivos("safety",unidade,turno||null):colabListaAtivos("safety");
+      dl.innerHTML="";
+      list.forEach(function(n){dl.innerHTML+='<option value="'+esc(n)+'"></option>';});
+      // Clear colab input when unit changes (unless typed value still valid)
+      if(cp){var cur=cp.value;if(cur&&!list.includes(cur))cp.value="";}
+    }
+    if(eu)eu.onchange=function(){_refreshColabList();chk();};
     // Retorna tamanhos que aparecem em entradas de um produto+cor, ou todos se nenhum entrada
     function tamsPorTipo(pr,corSel){
       if(!pr||!pr.tamanhos||!pr.tamanhos.length)return[];
@@ -3446,6 +3506,13 @@ function _wz_validarDados(){
   var lib=((document.getElementById("ew_lib")||{}).value||"").trim();
   var data=((document.getElementById("ew_data")||{}).value)||"";
   if(!colab||!lib||!data){toast("Preencha Colaborador, Data e Liberado por","erro");return;}
+  // Validate collaborator name exists (may be typed)
+  var _colabNormLC=colab.toLowerCase();
+  var _colabMatch=COLABORADORES.find(function(x){return (x.nome||"").toLowerCase()===_colabNormLC;})
+    ||COLAB_PLANILHA_ATIVOS.find(function(n){return n.toLowerCase()===_colabNormLC;});
+  if(!_colabMatch){toast("Colaborador não encontrado. Verifique o nome digitado.","erro");return;}
+  // Use canonical name from record
+  colab=_colabMatch.nome||_colabMatch||colab;
   if(!EPI_WZ.itens||!EPI_WZ.itens.length){toast("Adicione pelo menos um EPI à lista antes de continuar","erro");return;}
   // Preenche dados de cabeçalho + copia primeiro item p/ compatibilidade com etapas 2-4
   var fi=EPI_WZ.itens[0];
