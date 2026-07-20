@@ -1231,7 +1231,7 @@ function viewColabList(){
   const btnCad=dom==="safety"?'<button class="btn ghost sm" onclick="formCadastroColab()">＋ Cadastrar Colaborador</button>':"";
   const btnRelColab=dom==="safety"?'<button class="btn ghost sm" onclick="abrirRelatorioColaboradores()">&#128203; Relatório de Colaboradores</button>':"";
   const unidadeSel=dom==="safety"?(state.colabUnidade||"SMG6"):"";
-  const turnoSel=dom==="safety"&&unidadeSel==="SMG6"?(state.colabTurno||"PM"):"";
+  const turnoSel=dom==="safety"&&unidadeSel==="SMG6"?(state.colabTurno||"AM"):"";
   const ativos=colabListaAtivos(dom,unidadeSel||undefined,turnoSel||undefined);
 
   const unidadeTabs=dom==="safety"?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
@@ -1329,8 +1329,8 @@ function abrirRelatorioColaboradores(){
   }).slice().sort(function(a,b){return (a.nome||"").localeCompare(b.nome||"","pt-BR");});
 
   // Grupos
-  var smg6am=allColabs.filter(function(x){return (x.unidade||"SMG6")==="SMG6"&&(x.turno||"PM")==="AM";});
-  var smg6pm=allColabs.filter(function(x){return (x.unidade||"SMG6")==="SMG6"&&(x.turno||"PM")==="PM";});
+  var smg6am=allColabs.filter(function(x){return (x.unidade||"SMG6")==="SMG6"&&(x.turno||"AM")==="AM";});
+  var smg6pm=allColabs.filter(function(x){return (x.unidade||"SMG6")==="SMG6"&&(x.turno||"AM")==="PM";});
   var xmg2  =allColabs.filter(function(x){return x.unidade==="XMG2";});
 
   function mascaraCPF(cpf){
@@ -1535,7 +1535,7 @@ function formCadastroColab(colab){
         cpf:(document.getElementById("cc_cpf")||{}).value||"",
         contato:(document.getElementById("cc_contato")||{}).value||"",
         unidade:_ccUnidade,
-        turno:_ccUnidade==="SMG6"?((document.getElementById("cc_turno")||{}).value||"PM"):"",
+        turno:_ccUnidade==="SMG6"?((document.getElementById("cc_turno")||{}).value||"AM"):"",
         genero:(document.getElementById("cc_genero")||{}).value||"Masc.",
         tamCamisa:(document.getElementById("cc_camisa")||{}).value||"",
         tamCalca:(document.getElementById("cc_calca")||{}).value||"",
@@ -1951,11 +1951,15 @@ function viewRel(){
       </div>`
     : "";
 
-  var genMasc=COLABORADORES.filter(function(x){return !DESLIGADOS.includes(x.nome)&&x.genero==="Masc.";}).length;
-  var genFem=COLABORADORES.filter(function(x){return !DESLIGADOS.includes(x.nome)&&x.genero==="Fem.";}).length;
-  var genTotal=(genMasc+genFem)||1;
+  var genMasc=COLABORADORES.filter(function(x){return !DESLIGADOS.some(function(d){return d.toLowerCase()===(x.nome||"").toLowerCase();})&&x.genero==="Masc.";}).length;
+  var genFem=COLABORADORES.filter(function(x){return !DESLIGADOS.some(function(d){return d.toLowerCase()===(x.nome||"").toLowerCase();})&&x.genero==="Fem.";}).length;
+  // Total real: usa colabListaAtivos para incluir COLAB_PLANILHA_ATIVOS
+  var _totalAtivosReal=colabListaAtivos(dom).length;
+  var genNI=Math.max(0,_totalAtivosReal-genMasc-genFem);
+  var genTotal=_totalAtivosReal||1;
   var pctM=Math.round(genMasc/genTotal*100);
   var pctF=Math.round(genFem/genTotal*100);
+  var pctNI=Math.round(genNI/genTotal*100);
   var generoBlock=`<div class="panel" style="grid-column:1/-1">
     <div class="panel-bar"><h3>♀♂ Proporção de Gênero — Colaboradores Ativos</h3></div>
     <div style="padding:16px;display:flex;flex-wrap:wrap;gap:24px;align-items:center">
@@ -1974,6 +1978,13 @@ function viewRel(){
           </div>
           <div style="background:#fce4ec;border-radius:8px;height:20px;overflow:hidden"><div style="background:#ad1457;height:100%;width:${pctF}%;border-radius:8px"></div></div>
         </div>
+        ${genNI>0?`<div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px">
+            <span style="font-weight:600;color:#78909c">&#9899; Não informado</span>
+            <span style="font-family:var(--mono);font-weight:700">${genNI} (${pctNI}%)</span>
+          </div>
+          <div style="background:#eceff1;border-radius:8px;height:20px;overflow:hidden"><div style="background:#78909c;height:100%;width:${pctNI}%;border-radius:8px"></div></div>
+        </div>`:""}
       </div>
       <div style="display:flex;gap:14px;flex-wrap:wrap">
         <div style="background:#e3f2fd;border-radius:12px;padding:14px 22px;text-align:center;min-width:90px">
@@ -1986,8 +1997,13 @@ function viewRel(){
           <div style="font-size:10.5px;color:#5b6675;margin-top:3px">Feminino</div>
           <div style="font-size:17px;font-weight:700;color:#ad1457">${pctF}%</div>
         </div>
+        ${genNI>0?`<div style="background:#eceff1;border-radius:12px;padding:14px 22px;text-align:center;min-width:90px">
+          <div style="font-size:26px;font-weight:800;color:#546e7a;font-family:var(--mono)">${genNI}</div>
+          <div style="font-size:10.5px;color:#5b6675;margin-top:3px">Não informado</div>
+          <div style="font-size:17px;font-weight:700;color:#78909c">${pctNI}%</div>
+        </div>`:""}
         <div style="background:#f5f5f5;border-radius:12px;padding:14px 22px;text-align:center;min-width:90px">
-          <div style="font-size:26px;font-weight:800;color:#546e7a;font-family:var(--mono)">${genMasc+genFem}</div>
+          <div style="font-size:26px;font-weight:800;color:#546e7a;font-family:var(--mono)">${_totalAtivosReal}</div>
           <div style="font-size:10.5px;color:#5b6675;margin-top:3px">Total ativos</div>
         </div>
       </div>
@@ -2031,44 +2047,6 @@ function viewRel(){
       <div class="scroll-y" style="max-height:520px">${barRows}</div>
     </div>
     ${estoqueTagRows}
-    ${(function(){
-      // Saídas por produto × tamanho no período
-      var _stMap={};
-      sai.forEach(function(m){
-        if(!m.tamanho&&!m.cor)return;
-        var _p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
-        if(!_p)return;
-        var k=m.produtoId;
-        if(!_stMap[k])_stMap[k]={nome:_p.descricao,total:0,tams:{}};
-        _stMap[k].total+=m.qtd;
-        var tk=m.tamanho||(m.cor?"("+m.cor+")":"");
-        if(tk)_stMap[k].tams[tk]=(_stMap[k].tams[tk]||0)+m.qtd;
-      });
-      var _stList=Object.values(_stMap).filter(function(x){return Object.keys(x.tams).length>0;}).sort(function(a,b){return b.total-a.total;});
-      if(!_stList.length)return "";
-      var rows=_stList.map(function(item){
-        var tamEntries=Object.entries(item.tams).sort(function(a,b){return b[1]-a[1];});
-        var tamMax=tamEntries.reduce(function(m,e){return Math.max(m,e[1]);},1);
-        var cells=tamEntries.map(function(e){
-          var t=e[0],q=e[1];
-          var pct=Math.round(q/tamMax*100);
-          return "<div style='min-width:52px;flex:0 0 auto'>"
-            +"<div style='font-size:10px;font-weight:700;color:var(--txt-dim);text-align:center;letter-spacing:.04em;margin-bottom:3px'>"+esc(t)+"</div>"
-            +"<div style='height:48px;background:#f5f7fa;border-radius:6px 6px 0 0;overflow:hidden;display:flex;align-items:flex-end'>"
-            +"<div style='width:100%;height:"+pct+"%;background:linear-gradient(180deg,#5b67e8,#2D3277);border-radius:4px 4px 0 0'></div>"
-            +"</div>"
-            +"<div style='font-family:var(--mono);font-weight:800;font-size:13px;text-align:center;color:var(--txt);margin-top:3px'>"+q+"</div>"
-            +"</div>";
-        }).join("");
-        return "<div style='padding:10px 16px;border-bottom:1px solid var(--line-soft)'>"
-          +"<div style='font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px;display:flex;justify-content:space-between'>"
-          +"<span>"+esc(item.nome)+"</span><span style='font-family:var(--mono);color:var(--red)'>"+item.total+" total</span>"
-          +"</div>"
-          +"<div style='display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end'>"+cells+"</div>"
-          +"</div>";
-      }).join("");
-      return '<div class="panel" style="grid-column:1 / -1"><div class="panel-bar"><h3>📐 Saídas por Tamanho — '+periodoLbl+'</h3><div class="legend"><span><span class="dot" style="background:#2D3277"></span>Qtd. entregue</span></div></div><div class="scroll-y" style="max-height:420px">'+rows+'</div></div>';
-    })()}
     ${tipoPanel}
     ${dom==="safety"?generoBlock:""}
     <div class="panel">
