@@ -1089,20 +1089,46 @@ function viewEstoque(){
   let detRows,totals;
   if(sel){
     const ms=movOf(sel.id).slice().sort((a,b)=>b.data>a.data?1:(b.data<a.data?-1:((b._t||0)-(a._t||0))));
-    detRows=ms.length?ms.map(mv=>`<tr>
-      <td class="num">${fmtD(mv.data)}</td>
-      <td>${mv.tipo==="entrada"?`<span class="chip ent">Entrada</span>`:`<span class="chip sai">Saída</span>`}</td>
-      <td><b>${esc(mv.parte||"")}</b>${mv.tipo==="saida"&&mv.liberadoPor?`<br><span style="font-size:11px;color:var(--txt-faint)">lib: ${esc(mv.liberadoPor)}</span>`:""}</td>
-      <td>${mv.tamanho?`<span class="chip tam">${esc(mv.tamanho)}</span>`:"—"}</td>
-      <td>${mv.cor?corDot(mv.cor)+esc(mv.cor):"—"}</td>
-      <td class="num ${mv.tipo==='entrada'?'qpos':'qneg'}">${mv.tipo==="entrada"?"+":"−"}${mv.qtd}</td>
-      <td class="num">${mv.custoUnit?brl(mv.custoUnit):"—"}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(mv.obs||"")}</td>
-      <td class="num" style="display:flex;gap:4px;justify-content:flex-end">
-        ${mv.tipo==="entrada"?`<button class="icon-btn" data-editmov="${mv.id}" title="Editar entrada">✎</button>`:""}
-        <button class="icon-btn del" data-delmov="${mv.id}" title="Excluir">🗑</button>
-      </td>
-    </tr>`).join(""):`<tr><td colspan="9"><div class="empty">Sem movimentações. Use <b>Entrada (F5)</b>.</div></td></tr>`;
+    // Card-style movement list
+    detRows=ms.length?ms.map(mv=>{
+      const isEnt=mv.tipo==="entrada";
+      const accent=isEnt?"#27b863":"#e84040";
+      const bgRow=isEnt?"#f7fdf9":"#fdf5f5";
+      const qtdClr=isEnt?"var(--green)":"var(--red)";
+      const sign=isEnt?"+":"−";
+      const badgeBg=isEnt?"#e6f7ee":"#fde8e8";
+      const badgeTxt=isEnt?"#1a7a44":"#c0392b";
+      const badgeLbl=isEnt?"ENTRADA":"SAÍDA";
+      const tamTag=mv.tamanho?`<span class="chip tam" style="font-size:10.5px">${esc(mv.tamanho)}</span>`:"";
+      const corTag=mv.cor?`<span class="chip" style="font-size:10.5px;background:#f0f2f5;padding:2px 7px">${corDot(mv.cor)}${esc(mv.cor)}</span>`:"";
+      const obsTag=mv.obs?`<span style="font-size:11px;color:var(--txt-faint);font-style:italic">${esc(mv.obs)}</span>`:"";
+      const libTag=!isEnt&&mv.liberadoPor?`<span style="font-size:11px;color:var(--txt-faint)">▸ lib: <b>${esc(mv.liberadoPor)}</b></span>`:"";
+      const custoTag=mv.custoUnit?`<span style="font-size:11px;color:var(--txt-dim);font-family:var(--mono)">${brl(mv.custoUnit)}/un</span>`:"";
+      return `<div style="display:flex;align-items:stretch;border-bottom:1px solid var(--line-soft)">
+        <div style="width:4px;flex:0 0 4px;background:${accent}"></div>
+        <div style="display:flex;flex:1;align-items:center;gap:14px;padding:9px 14px;background:${bgRow};min-width:0">
+          <div style="display:flex;flex-direction:column;align-items:center;min-width:50px;flex:0 0 50px">
+            <span style="font-size:10.5px;font-weight:700;color:var(--txt-dim);white-space:nowrap">${fmtD(mv.data)}</span>
+            <span style="font-size:16px;margin-top:2px">${isEnt?"📦":"📤"}</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:13.5px;font-weight:700;color:var(--txt)">${esc(mv.parte||"—")}</span>
+              <span style="padding:2px 8px;border-radius:12px;font-size:9.5px;font-weight:800;letter-spacing:.05em;background:${badgeBg};color:${badgeTxt}">${badgeLbl}</span>
+              ${tamTag}${corTag}
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${libTag}${custoTag}${obsTag}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:0 0 auto">
+            <span style="font-family:var(--mono);font-weight:800;font-size:22px;color:${qtdClr};line-height:1">${sign}${mv.qtd}</span>
+            <div style="display:flex;gap:4px">
+              ${isEnt?`<button class="icon-btn" data-editmov="${mv.id}" title="Editar" style="color:var(--blue)">✎</button>`:""}
+              <button class="icon-btn del" data-delmov="${mv.id}" title="Excluir">🗑</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join(""):`<div class="empty" style="padding:24px">Sem movimentações. Use <b>Entrada (F5)</b>.</div>`;
     const at=atual(sel.id),cu=custoUnit(sel.id);
     totals=`<div class="totals">
       <div class="tot"><span class="l">Produto</span><span class="v">${esc(sel.descricao)}</span></div>
@@ -1166,7 +1192,7 @@ function viewEstoque(){
   }
 
   const tableHeader=sel
-    ?`<thead><tr><th>Data</th><th>Tipo</th><th>${dom==="safety"?"Colaborador / Fornecedor":"Destino / Fornecedor"}</th><th>Tamanho</th><th>Cor</th><th class="num">Qtde.</th><th class="num">Custo</th><th>Observações</th><th></th></tr></thead>`
+    ? "" // card view — no table header needed
     :`<thead><tr><th>Produto</th><th>Tipo/Modelo</th><th class="num">Saldo</th><th class="num">Custo Unit.</th><th class="num">Valor Total</th></tr></thead>`;
 
   // Toolbar de produto: só no contexto do produto selecionado (lista suspensa de Safety/Insumos)
@@ -1193,7 +1219,7 @@ function viewEstoque(){
   </div>
   <div class="panel detail">
     <div class="panel-bar"><h3>${sel?"Movimentações":"Resumo de Estoque"}</h3>${hasSel?`<div class="right"><span style="font-size:12px;color:var(--txt-faint)">${esc(sel.descricao)}</span></div>`:""}</div>
-    <div class="scroll-y"><table>${tableHeader}<tbody>${detRows}</tbody></table></div>
+    <div class="scroll-y">${sel?detRows:`<table>${tableHeader}<tbody>${detRows}</tbody></table>`}</div>
   </div>
   ${totals}`;
 }
@@ -1787,11 +1813,51 @@ function viewRel(){
       ${hasTams?`<div style="padding:8px 14px 14px"><div style="font-size:11px;font-weight:700;color:var(--txt-dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Por Tamanho — ${periodoLbl}</div>${tamChart}</div>`:""}
     </div>`;
   }else{
+    // Consumo por EPI × Tamanho no período (substitui gráfico de saldo total)
+    var _cpMap={};
+    sai.forEach(function(m){
+      var _p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+      if(!_p)return;
+      var k=m.produtoId;
+      if(!_cpMap[k])_cpMap[k]={nome:_p.descricao,qtd:0,tams:{}};
+      _cpMap[k].qtd+=m.qtd;
+      if(m.tamanho){_cpMap[k].tams[m.tamanho]=(_cpMap[k].tams[m.tamanho]||0)+m.qtd;}
+      if(m.cor&&!m.tamanho){var ck="("+m.cor+")";_cpMap[k].tams[ck]=(_cpMap[k].tams[ck]||0)+m.qtd;}
+    });
+    var _cpList=Object.values(_cpMap).sort(function(a,b){return b.qtd-a.qtd;}).slice(0,12);
+    var _cpMax=_cpList.length?_cpList[0].qtd:1;
+    var HEATCOLS=["#fff0f0","#ffcccc","#ff9999","#ff6666","#e84040","#c0392b"];
+    var _cpRows=_cpList.map(function(item){
+      var tamEntries=Object.entries(item.tams).sort(function(a,b){return b[1]-a[1];});
+      var tamMax=tamEntries.length?tamEntries[0][1]:1;
+      var tamCells=tamEntries.map(function(e){
+        var t=e[0],q=e[1];
+        var ci=Math.min(5,Math.floor(q/tamMax*5));
+        var bg=HEATCOLS[ci];
+        var txtc=ci>=3?"#fff":"#2c2c2c";
+        return "<div style='display:inline-flex;flex-direction:column;align-items:center;padding:5px 10px;border-radius:8px;min-width:48px;background:"+bg+";margin:3px'>"
+          +"<span style='font-family:var(--mono);font-weight:800;font-size:15px;color:"+txtc+"'>"+q+"</span>"
+          +"<span style='font-size:10px;font-weight:600;color:"+txtc+";margin-top:2px;letter-spacing:.03em'>"+esc(t)+"</span>"
+          +"</div>";
+      }).join("");
+      var pct=Math.round(item.qtd/_cpMax*100);
+      return "<div style='padding:10px 16px;border-bottom:1px solid var(--line-soft)'>"
+        +"<div style='display:flex;align-items:center;gap:10px;margin-bottom:5px'>"
+        +"<span style='flex:1;font-size:13px;font-weight:700;color:var(--txt)'>"+esc(item.nome)+"</span>"
+        +"<span style='font-family:var(--mono);font-weight:800;font-size:15px;color:var(--red)'>"+item.qtd+"</span>"
+        +"<span style='font-size:11px;color:var(--txt-faint)'>unid.</span>"
+        +"</div>"
+        +"<div style='height:6px;background:#f0f2f5;border-radius:4px;overflow:hidden;margin-bottom:8px'>"
+        +"<div style='height:100%;width:"+pct+"%;background:linear-gradient(90deg,#e84040,#ff6b6b);border-radius:4px'></div>"
+        +"</div>"
+        +(tamCells?"<div style='display:flex;flex-wrap:wrap;gap:2px'>"+tamCells+"</div>":"")
+        +"</div>";
+    }).join("");
     evoBlock=`<div class="panel" style="grid-column:1 / -1">
-      <div class="panel-bar"><h3>Evolução do Saldo Total — ${periodoLbl}</h3>
-        <div class="legend"><span><span class="dot" style="background:#2D3277"></span>Saldo total</span></div>
+      <div class="panel-bar"><h3>🔥 Consumo por EPI / Tamanho — ${periodoLbl}</h3>
+        <div class="legend"><span><span class="dot" style="background:var(--red)"></span>Saídas no período</span></div>
       </div>
-      <div style="padding:14px 8px 6px">${evoSVG}</div>
+      <div class="scroll-y" style="max-height:440px">${_cpRows||'<div class="empty">Nenhuma saída registrada no período.</div>'}</div>
     </div>`;
   }
 
@@ -1965,6 +2031,44 @@ function viewRel(){
       <div class="scroll-y" style="max-height:520px">${barRows}</div>
     </div>
     ${estoqueTagRows}
+    ${(function(){
+      // Saídas por produto × tamanho no período
+      var _stMap={};
+      sai.forEach(function(m){
+        if(!m.tamanho&&!m.cor)return;
+        var _p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+        if(!_p)return;
+        var k=m.produtoId;
+        if(!_stMap[k])_stMap[k]={nome:_p.descricao,total:0,tams:{}};
+        _stMap[k].total+=m.qtd;
+        var tk=m.tamanho||(m.cor?"("+m.cor+")":"");
+        if(tk)_stMap[k].tams[tk]=(_stMap[k].tams[tk]||0)+m.qtd;
+      });
+      var _stList=Object.values(_stMap).filter(function(x){return Object.keys(x.tams).length>0;}).sort(function(a,b){return b.total-a.total;});
+      if(!_stList.length)return "";
+      var rows=_stList.map(function(item){
+        var tamEntries=Object.entries(item.tams).sort(function(a,b){return b[1]-a[1];});
+        var tamMax=tamEntries.reduce(function(m,e){return Math.max(m,e[1]);},1);
+        var cells=tamEntries.map(function(e){
+          var t=e[0],q=e[1];
+          var pct=Math.round(q/tamMax*100);
+          return "<div style='min-width:52px;flex:0 0 auto'>"
+            +"<div style='font-size:10px;font-weight:700;color:var(--txt-dim);text-align:center;letter-spacing:.04em;margin-bottom:3px'>"+esc(t)+"</div>"
+            +"<div style='height:48px;background:#f5f7fa;border-radius:6px 6px 0 0;overflow:hidden;display:flex;align-items:flex-end'>"
+            +"<div style='width:100%;height:"+pct+"%;background:linear-gradient(180deg,#5b67e8,#2D3277);border-radius:4px 4px 0 0'></div>"
+            +"</div>"
+            +"<div style='font-family:var(--mono);font-weight:800;font-size:13px;text-align:center;color:var(--txt);margin-top:3px'>"+q+"</div>"
+            +"</div>";
+        }).join("");
+        return "<div style='padding:10px 16px;border-bottom:1px solid var(--line-soft)'>"
+          +"<div style='font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px;display:flex;justify-content:space-between'>"
+          +"<span>"+esc(item.nome)+"</span><span style='font-family:var(--mono);color:var(--red)'>"+item.total+" total</span>"
+          +"</div>"
+          +"<div style='display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end'>"+cells+"</div>"
+          +"</div>";
+      }).join("");
+      return '<div class="panel" style="grid-column:1 / -1"><div class="panel-bar"><h3>📐 Saídas por Tamanho — '+periodoLbl+'</h3><div class="legend"><span><span class="dot" style="background:#2D3277"></span>Qtd. entregue</span></div></div><div class="scroll-y" style="max-height:420px">'+rows+'</div></div>';
+    })()}
     ${tipoPanel}
     ${dom==="safety"?generoBlock:""}
     <div class="panel">
@@ -3236,9 +3340,9 @@ function _wz_step1(prods,prefColab){
     +'<div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:10px;text-transform:uppercase;letter-spacing:.07em">&#43; Adicionar EPI à lista</div>'
     +'<div class="mgrid">'
     +'<div class="mfield full"><label>EPI / Produto <span class="req">*</span></label><select id="ew_prod">'+prodOpts+'</select></div>'
+    +'<div id="ew_tipo_wrap" class="mfield full" style="display:none"><label>Tipo / Modelo <span style="font-size:10px;color:var(--txt-faint)">(opcional)</span></label><select id="ew_tipo"><option value="">— nenhum —</option></select></div>'
     +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
     +'<div class="mfield"><label>Dispon&iacute;vel</label><input id="ew_disp" readonly value="&#8212;"></div>'
-    +'<div id="ew_tipo_wrap" class="mfield full" style="display:none"><label>Tipo / Modelo <span style="font-size:10px;color:var(--txt-faint)">(opcional)</span></label><select id="ew_tipo"><option value="">— nenhum —</option></select></div>'
     +'<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="ew_qtd" min="1" step="1" value="1"></div>'
     +'<div class="mfield"><label>Motivo <span class="req">*</span></label><select id="ew_motivo"><option value="">&#8212; selecione &#8212;</option><option value="Primeiro Item">Primeiro Item</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
     +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: detalhe adicional&#8230;"></div>'
