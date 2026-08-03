@@ -3211,8 +3211,10 @@ function formMov(tipo){
           api("getUsuarios",null).then(function(r){
             if(r&&r.ok&&r.data){
               muSel.innerHTML='<option value="">— selecione —</option>';
+              r.data.forEach(function(u){
+                _uCache[u.email]=u; // salva todos para _populateLib do wizard EPI usar
+              });
               r.data.filter(function(u){return u.nivel==="admin";}).forEach(function(u){
-                _uCache[u.email]=u;
                 muSel.innerHTML+='<option value="'+esc(u.nome||u.email)+'">'+esc(u.nome||u.email)+'</option>';
               });
             } else {
@@ -3344,33 +3346,29 @@ function _wz_step1(prods,prefColab){
     // Populate Liberado Por with admin+operador users
     function _populateLib(){
       if(!elib)return;
-      var users=Object.values(_uCache).filter(function(u){return u.nivel==="admin"||u.nivel==="operador";});
       var curUser=getUser();
-      if(users.length>0){
-        elib.innerHTML='<option value="">— selecione —</option>';
-        users.forEach(function(u){
-          var n=u.nome||u.email;
-          elib.innerHTML+='<option value="'+esc(n)+'"'+( curUser&&(curUser.nome===n||curUser.email===u.email)?' selected':'')+'>'+esc(n)+'</option>';
-        });
-      } else {
-        api("getUsuarios",null).then(function(r){
-          if(r&&r.ok&&r.data){
-            elib.innerHTML='<option value="">— selecione —</option>';
-            r.data.filter(function(u){return u.nivel==="admin"||u.nivel==="operador";}).forEach(function(u){
-              _uCache[u.email]=u;
-              var n=u.nome||u.email;
-              elib.innerHTML+='<option value="'+esc(n)+'">'+esc(n)+'</option>';
-            });
-            // pre-select current user
-            var cu=getUser();
-            if(cu&&elib){
-              Array.from(elib.options).forEach(function(o){
-                if(o.value===(cu.nome||cu.email))o.selected=true;
-              });
-            }
-          }
-        });
-      }
+      // Sempre busca lista atualizada da API para garantir admin+operador
+      api("getUsuarios",null).then(function(r){
+        if(r&&r.ok&&r.data){
+          r.data.forEach(function(u){_uCache[u.email]=u;});
+          var allowed=r.data.filter(function(u){return u.nivel==="admin"||u.nivel==="operador";});
+          elib.innerHTML='<option value="">— selecione —</option>';
+          allowed.forEach(function(u){
+            var n=u.nome||u.email;
+            var sel=curUser&&(curUser.nome===n||curUser.email===u.email);
+            elib.innerHTML+='<option value="'+esc(n)+'"'+(sel?' selected':'')+'>'+esc(n)+'</option>';
+          });
+        } else {
+          // fallback: cache
+          var users=Object.values(_uCache).filter(function(u){return u.nivel==="admin"||u.nivel==="operador";});
+          elib.innerHTML='<option value="">— selecione —</option>';
+          users.forEach(function(u){
+            var n=u.nome||u.email;
+            var sel=curUser&&(curUser.nome===n||curUser.email===u.email);
+            elib.innerHTML+='<option value="'+esc(n)+'"'+(sel?' selected':'')+'>'+esc(n)+'</option>';
+          });
+        }
+      });
     }
     _populateLib();
     // Refresh collaborator datalist based on selected unit/shift
