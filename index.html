@@ -214,6 +214,10 @@ window.onerror=function(msg,src,line,col,err){
         <span id="drive-dot" style="width:8px;height:8px;border-radius:50%;background:#8b94a3;display:inline-block;transition:.3s"></span>
         <span id="drive-lbl">Sheets</span>
       </span>
+      <button id="btn_refresh" onclick="refreshAll()" title="Atualizar dados agora" style="background:none;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px">
+        <span id="refresh_icon">↻</span><span id="refresh_lbl" style="font-size:10px">Atualizar</span>
+      </button>
+      <span id="last_sync_lbl" style="font-size:9px;opacity:.65;white-space:nowrap"></span>
       <span id="clock"></span>
       <span id="save" style="font-size:11px;opacity:.85">—</span>
       <button onclick="doLogout()" style="background:var(--blue);border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--body)">Sair</button>
@@ -719,9 +723,71 @@ async function loadAll(){
   aplicarExclusoesLocaisDesl();
   COLABORADORES = colabCacheMerge(r.colaboradores || []);
   driveSetStatus("ok");
+  _lastLoadTs=Date.now();
+  _updateSyncLbl();
   return true;
 }
 
+var _lastLoadTs=0;
+var _refreshInterval=null;
+async function refreshAll(){
+  if(refreshAll._running) return; // prevent overlap
+  refreshAll._running=true;
+  var icon=document.getElementById("refresh_icon");
+  var lbl=document.getElementById("refresh_lbl");
+  if(icon) icon.style.transition="transform .4s";
+  if(icon) icon.style.transform="rotate(360deg)";
+  if(lbl) lbl.textContent="Atualizando…";
+  try{
+    const r=await api("getAll",null,true);
+    if(r&&r.ok){
+      PRODUTOS      = r.produtos      || [];
+      MOVS          = r.movs          || [];
+      DESLIGADOS    = r.desligados    || [];
+      aplicarExclusoesLocaisDesl();
+      COLABORADORES = colabCacheMerge(r.colaboradores||[]);
+      _lastLoadTs=Date.now();
+      _updateSyncLbl();
+      driveSetStatus("ok");
+      render();
+    } else {
+      driveSetStatus("error");
+    }
+  } catch(e){
+    driveSetStatus("error");
+  } finally {
+    refreshAll._running=false;
+    setTimeout(function(){
+      if(icon){icon.style.transform="rotate(0deg)";}
+      if(lbl) lbl.textContent="Atualizar";
+    },600);
+  }
+}
+function _updateSyncLbl(){
+  var el=document.getElementById("last_sync_lbl");
+  if(!el||!_lastLoadTs) return;
+  var diff=Math.round((Date.now()-_lastLoadTs)/1000);
+  var txt=diff<60?"agora":diff<3600?Math.round(diff/60)+"min atrás":Math.round(diff/3600)+"h atrás";
+  el.textContent="sync "+txt;
+}
+function _startAutoRefresh(){
+  if(_refreshInterval) clearInterval(_refreshInterval);
+  // Auto-refresh every 2 minutes
+  _refreshInterval=setInterval(function(){
+    if(getToken()) refreshAll();
+  },2*60*1000);
+  // Update "last sync" label every 30s
+  setInterval(function(){_updateSyncLbl();},30000);
+  // Refresh on tab/window focus if data is >60s old
+  document.addEventListener("visibilitychange",function(){
+    if(document.visibilityState==="visible"&&getToken()){
+      if(!_lastLoadTs||Date.now()-_lastLoadTs>60000) refreshAll();
+    }
+  });
+  window.addEventListener("focus",function(){
+    if(getToken()&&(!_lastLoadTs||Date.now()-_lastLoadTs>60000)) refreshAll();
+  });
+}
 async function doLogin(){
   var email=(document.getElementById("li_email")||{}).value||"";
   var senha=(document.getElementById("li_senha")||{}).value||"";
@@ -757,6 +823,7 @@ async function doLogin(){
   state.repStart=today().slice(0,8)+"01";
   state.repEnd=today();
   if(window._postLoginHook) window._postLoginHook();
+  _startAutoRefresh();
   render();
   // Verificar primeiro acesso — solicitar troca de senha
   if(r.primeiroAcesso){
