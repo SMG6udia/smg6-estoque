@@ -610,7 +610,7 @@ function colabListaAtivos(dom,unidade,turno){
   base.forEach(function(n){var k=(n||"").toLowerCase();if(!_seenNames[k]){_seenNames[k]=n;_deduped.push(n);}});
   let lista=_deduped.filter(n=>!DESLIGADOS.some(d=>d.toLowerCase()===n.toLowerCase()));
   if(unidade){lista=lista.filter(function(n){return colabUnidadeOf(n)===unidade;});}
-  if(unidade==="SMG6"&&turno){lista=lista.filter(function(n){return colabTurnoOf(n)===turno;});}
+  if(unidade==="SMG6"&&turno){lista=lista.filter(function(n){var t=colabTurnoOf(n);return !t||t===turno;});}
   return lista.sort((a,b)=>a.localeCompare(b,"pt-BR"));
 }
 function mesLabel(ym){const[y,m]=ym.split("-");return MESES[Number(m)-1]+"/"+y;}
@@ -746,6 +746,8 @@ async function refreshAll(){
       MOVS          = r.movs          || [];
       DESLIGADOS    = r.desligados    || [];
       aplicarExclusoesLocaisDesl();
+      // Limpa cache de colaboradores antes de mergear para evitar dados obsoletos de outros dispositivos
+      _colabCacheSet({});
       COLABORADORES = colabCacheMerge(r.colaboradores||[]);
       _lastLoadTs=Date.now();
       _updateSyncLbl();
