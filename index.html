@@ -1687,7 +1687,7 @@ function viewBusca(){
         resultHtml+='<div class="panel" style="margin-bottom:16px">'
           +'<div class="panel-bar"><h3>👤 '+esc(colabNom)+'</h3>'
           +'<div class="right"><span style="font-size:12px;color:var(--txt-faint)">'+colabMovs.length+' entregas · '+totalItens+' itens</span>'
-          +'<button class="btn ghost sm" onclick="_busca_pdf_colab(''+esc(colabNom)+'')" style="margin-left:8px">🖨 PDF</button></div></div>'
+          +'<button class="btn ghost sm" onclick="_busca_pdf_colab(\''+esc(colabNom)+'\')" style="margin-left:8px">🖨 PDF</button></div></div>'
           +(colabObj?'<div style="padding:8px 16px;font-size:12px;color:var(--txt-dim);border-bottom:1px solid var(--line-soft)">'
             +(colabObj.unidade||"SMG6")+(colabObj.turno?" · "+colabObj.turno:"")+(colabObj.genero?" · "+colabObj.genero:"")+(colabObj.cpf?" · CPF "+colabObj.cpf:"")+'</div>':"")
           +(rowsColab?'<div class="scroll-y" style="max-height:400px"><table><thead><tr><th>Data</th><th>EPI</th><th>Tam.</th><th>Tipo</th><th class="num">Qtd</th><th>Liberado por</th><th>Obs</th></tr></thead><tbody>'+rowsColab+'</tbody></table></div>'
@@ -1712,7 +1712,7 @@ function viewBusca(){
         resultHtml+='<div class="panel" style="margin-bottom:16px">'
           +'<div class="panel-bar"><h3>📦 '+esc(p.descricao)+'</h3>'
           +'<div class="right"><span style="font-size:12px;color:var(--txt-faint)">Saldo: <b>'+saldoAtual+'</b> · '+totalSai+' saídas · '+totalEnt+' entradas</span>'
-          +'<button class="btn ghost sm" onclick="_busca_pdf_prod(''+p.id+'')" style="margin-left:8px">🖨 PDF</button></div></div>'
+          +'<button class="btn ghost sm" onclick="_busca_pdf_prod(\''+p.id+'\')" style="margin-left:8px">🖨 PDF</button></div></div>'
           +(rowsProd?'<div class="scroll-y" style="max-height:400px"><table><thead><tr><th>Data</th><th>Colaborador</th><th>Tam.</th><th>Tipo</th><th class="num">Qtd</th><th>Liberado por</th></tr></thead><tbody>'+rowsProd+'</tbody></table></div>'
             :'<div class="empty">Nenhuma saída registrada.</div>')
           +'</div>';
