@@ -371,24 +371,21 @@ function _colabCacheSet(cache){try{localStorage.setItem(COLAB_CACHE_KEY,JSON.str
 function colabCacheSave(obj){if(!obj||!obj.id)return;var ch=_colabCacheGet();ch[obj.id]=obj;_colabCacheSet(ch);}
 function colabCacheMerge(arr){
   var ch=_colabCacheGet();
-  // Mescla campos do cache nos objetos vindos do backend
+  // Backend sempre tem precedencia. Cache so preenche campos que o backend NAO enviou.
   var merged=arr.map(function(c){
     var cached=ch[c.id];
-    if(!cached)return c;
-    // backend tem precedência para campos básicos, mas preserva campos extras do cache se backend não os tem
-    var m=Object.assign({},cached,c);
-    if(!c.unidade&&cached.unidade)m.unidade=cached.unidade;
-    if(!c.genero&&cached.genero)m.genero=cached.genero;
-    if(!c.turno&&cached.turno)m.turno=cached.turno;
+    if(!cached) return c;
+    var m=Object.assign({},cached,c); // backend (c) sobrescreve cache
+    if(!m.unidade && cached.unidade) m.unidade=cached.unidade;
+    if(!m.genero  && cached.genero)  m.genero =cached.genero;
+    if(!m.turno   && cached.turno)   m.turno  =cached.turno;
     return m;
   });
-  // Adiciona colaboradores que estão no cache mas não vieram do backend
   Object.keys(ch).forEach(function(id){
     if(!merged.find(function(c){return c.id===id;})){
       merged.push(ch[id]);
     }
   });
-  // Deduplicar por nome (case-insensitive): substitui in-place pelo mais completo
   var seenMap={};
   var result=[];
   merged.forEach(function(x){
@@ -399,10 +396,14 @@ function colabCacheMerge(arr){
     } else {
       var prev=result[seenMap[key]];
       if((x.unidade||x.genero||x.turno)&&!(prev.unidade||prev.genero||prev.turno)){
-        result[seenMap[key]]=x; // substitui in-place pelo mais completo
+        result[seenMap[key]]=x;
       }
     }
   });
+  // Sincroniza cache local com resultado final para nao ficar obsoleto
+  var newCache={};
+  result.forEach(function(c){if(c.id) newCache[c.id]=c;});
+  _colabCacheSet(newCache);
   return result;
 }
 function canEdit(){ const u=getUser(); return u&&(u.nivel==="admin"||u.nivel==="operador"); }
@@ -639,7 +640,7 @@ function itensAbaixoMin(dom){return prodOf(dom).map(p=>({p:p,saldo:atual(p.id),m
 
 /* ================= STATE ================= */
 let PRODUTOS=[],MOVS=[],DESLIGADOS=[],COLABORADORES=[];
-let state={dom:"safety",view:"estoque",sel:null,colab:null,histColab:null,rep:"semana",repWeek:null,repMonth:"",repYear:0,repStart:"",repEnd:"",repItem:"",repBusca:"",colabUnidade:"SMG6",colabTurno:"PM",repUnidade:"geral"};
+let state={dom:"safety",view:"estoque",sel:null,colab:null,histColab:null,rep:"semana",repWeek:null,repMonth:"",repYear:0,repStart:"",repEnd:"",repItem:"",repBusca:"",colabUnidade:"SMG6",colabTurno:"",repUnidade:"geral"};
 let _repRange={start:"",end:""};
 
 /* ================= STORAGE (Google Sheets) ================= */
@@ -1297,7 +1298,7 @@ function viewColabList(){
   const btnCad=dom==="safety"?'<button class="btn ghost sm" onclick="formCadastroColab()">＋ Cadastrar Colaborador</button>':"";
   const btnRelColab=dom==="safety"?'<button class="btn ghost sm" onclick="abrirRelatorioColaboradores()">&#128203; Relatório de Colaboradores</button>':"";
   const unidadeSel=dom==="safety"?(state.colabUnidade||"SMG6"):"";
-  const turnoSel=dom==="safety"&&unidadeSel==="SMG6"?(state.colabTurno||"AM"):"";
+  const turnoSel=dom==="safety"&&unidadeSel==="SMG6"?(state.colabTurno||""):"";;
   const ativos=colabListaAtivos(dom,unidadeSel||undefined,turnoSel||undefined);
 
   const unidadeTabs=dom==="safety"?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
@@ -1307,6 +1308,7 @@ function viewColabList(){
       <button data-cu="XMG2" class="${unidadeSel==="XMG2"?"active":""}">XMG2</button>
     </div>
     ${unidadeSel==="SMG6"?`<div class="seg" id="colabTurnoSeg" style="margin-left:12px">
+      <button data-ct="" class="${turnoSel===""?"active":""}">Todos</button>
       <button data-ct="AM" class="${turnoSel==="AM"?"active":""}">AM</button>
       <button data-ct="PM" class="${turnoSel==="PM"?"active":""}">PM</button>
     </div>`:""}
