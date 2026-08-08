@@ -722,6 +722,8 @@ async function loadAll(){
   MOVS          = r.movs          || [];
   DESLIGADOS    = r.desligados    || [];
   aplicarExclusoesLocaisDesl();
+  // Backend é a fonte da verdade — limpa cache antes de mergear (evita dados obsoletos no login)
+  _colabCacheSet({});
   COLABORADORES = colabCacheMerge(r.colaboradores || []);
   driveSetStatus("ok");
   _lastLoadTs=Date.now();
@@ -3489,7 +3491,7 @@ async function submitMov(tipo){
     var caVal="", obsEnt=val("m_obs").trim();
     if(state.dom==="safety"){
       caVal=val("m_ca").trim();
-      obsEnt=("C.A. "+caVal)+(obsEnt?(" — "+obsEnt):"");
+      if(caVal){obsEnt="C.A. "+caVal+(obsEnt?(" — "+obsEnt):"");}
     }
     var genEnt=(document.getElementById("m_genero")||{}).value||"Unissex";var novaEnt={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,tipo:"entrada",data,qtd,tamanho:tam,cor,parte:parte||"—",custoUnit:Number(val("m_cu"))||0,usuario:val("m_user").trim(),obs:obsEnt,ca:caVal,genero:genEnt};
     const r_e=await persistMov(novaEnt);if(!r_e)return;
