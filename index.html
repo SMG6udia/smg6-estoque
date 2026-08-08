@@ -1656,144 +1656,193 @@ function weekOptionsHtml(){
   return `<div class="fg"><label>De</label><input type="date" id="rep_start" value="${state.repStart||today().slice(0,8)+"01"}"></div><div class="fg"><label>Até</label><input type="date" id="rep_end" value="${state.repEnd||today()}"></div>`;
 }
 
+function _buscaDateRange(){
+  var mode=state.buscaData||"tudo";
+  var t=today();
+  if(mode==="hoje") return {de:t,ate:t};
+  if(mode==="semana"){
+    var d=new Date(t+"T00:00:00");
+    var day=d.getDay();
+    var mon=new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1));
+    var sun=new Date(mon); sun.setDate(mon.getDate()+6);
+    return {de:mon.toISOString().slice(0,10),ate:sun.toISOString().slice(0,10)};
+  }
+  if(mode==="mes"){
+    var ym=t.slice(0,7);
+    var last=new Date(parseInt(ym.slice(0,4)),parseInt(ym.slice(5,7)),0);
+    return {de:ym+"-01",ate:last.toISOString().slice(0,10)};
+  }
+  if(mode==="custom") return {de:state.buscaDe||"",ate:state.buscaAte||""};
+  return {de:"",ate:""};
+}
 function viewBusca(){
   var q=(state.buscaQ||"").trim();
-  var tipo=state.buscaTipo||"auto"; // "colab","produto","auto"
+  var tam=(state.buscaTam||"").trim().toUpperCase();
+  var dataMode=state.buscaData||"tudo";
+  var range=_buscaDateRange();
   var dom=state.dom;
-  // build search results
-  var resultHtml="";
-  if(q.length>=2){
-    // Try to match as collaborator
-    var colabMatch=COLABORADORES.find(function(x){return (x.nome||"").toLowerCase().includes(q.toLowerCase());});
-    var colabNomMatch=colabListaAtivos(dom).find(function(n){return n.toLowerCase().includes(q.toLowerCase());});
-    var colabNom=colabMatch?colabMatch.nome:(colabNomMatch||null);
-    // Try to match as product
-    var prodMatch=prodOf(dom).filter(function(p){return p.descricao.toLowerCase().includes(q.toLowerCase());});
-    // Determine mode
-    var mode=(tipo==="colab"||(!prodMatch.length&&colabNom))?"colab":(tipo==="produto"||(!colabNom&&prodMatch.length))?"produto":"ambos";
-    if(mode==="colab"||mode==="ambos"){
-      if(colabNom){
-        var colabMovs=MOVS.filter(function(m){return m.tipo==="saida"&&(m.parte||"").toLowerCase().includes(q.toLowerCase());}).sort(function(a,b){return b.data>a.data?1:-1;});
-        var colabObj=COLABORADORES.find(function(x){return (x.nome||"").toLowerCase()===colabNom.toLowerCase();});
-        var totalItens=colabMovs.reduce(function(s,m){return s+m.qtd;},0);
-        var rowsColab=colabMovs.map(function(m){
-          var p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
-          var tam=m.tamanho?('<span class="chip tam">'+esc(m.tamanho)+'</span>'):"—";
-          var cor=m.cor?('<span class="chip">'+esc(m.cor)+'</span>'):"—";
-          return '<tr><td>'+fmtD(m.data)+'</td><td>'+(p?esc(p.descricao):"?")+'</td><td>'+tam+'</td><td>'+cor+'</td>'
-            +'<td class="num">'+m.qtd+'</td><td>'+esc(m.liberadoPor||"—")+'</td>'
-            +'<td style="font-size:10.5px;color:var(--txt-faint)">'+esc((m.obs||"").replace(/\[COD:.*?\]/g,"").trim())+'</td></tr>';
-        }).join("");
-        resultHtml+='<div class="panel" style="margin-bottom:16px">'
-          +'<div class="panel-bar"><h3>👤 '+esc(colabNom)+'</h3>'
-          +'<div class="right"><span style="font-size:12px;color:var(--txt-faint)">'+colabMovs.length+' entregas · '+totalItens+' itens</span>'
-          +'<button class="btn ghost sm" onclick="_busca_pdf_colab(\''+esc(colabNom)+'\')" style="margin-left:8px">🖨 PDF</button></div></div>'
-          +(colabObj?'<div style="padding:8px 16px;font-size:12px;color:var(--txt-dim);border-bottom:1px solid var(--line-soft)">'
-            +(colabObj.unidade||"SMG6")+(colabObj.turno?" · "+colabObj.turno:"")+(colabObj.genero?" · "+colabObj.genero:"")+(colabObj.cpf?" · CPF "+colabObj.cpf:"")+'</div>':"")
-          +(rowsColab?'<div class="scroll-y" style="max-height:400px"><table><thead><tr><th>Data</th><th>EPI</th><th>Tam.</th><th>Tipo</th><th class="num">Qtd</th><th>Liberado por</th><th>Obs</th></tr></thead><tbody>'+rowsColab+'</tbody></table></div>'
-            :'<div class="empty">Nenhuma entrega registrada.</div>')
-          +'</div>';
-      }
-    }
-    if(mode==="produto"||mode==="ambos"){
-      prodMatch.forEach(function(p){
-        var prodMovsAll=movOf(p.id);
-        var prodSai=prodMovsAll.filter(function(m){return m.tipo==="saida";}).sort(function(a,b){return b.data>a.data?1:-1;});
-        var prodEnt=prodMovsAll.filter(function(m){return m.tipo==="entrada";});
-        var totalSai=prodSai.reduce(function(s,m){return s+m.qtd;},0);
-        var totalEnt=prodEnt.reduce(function(s,m){return s+m.qtd;},0);
-        var saldoAtual=atual(p.id);
-        var rowsProd=prodSai.map(function(m){
-          var tam=m.tamanho?('<span class="chip tam">'+esc(m.tamanho)+'</span>'):"—";
-          var cor=m.cor?('<span class="chip">'+esc(m.cor)+'</span>'):"—";
-          return '<tr><td>'+fmtD(m.data)+'</td><td><b>'+esc(m.parte||"—")+'</b></td><td>'+tam+'</td><td>'+cor+'</td>'
-            +'<td class="num qneg">'+m.qtd+'</td><td>'+esc(m.liberadoPor||"—")+'</td></tr>';
-        }).join("");
-        resultHtml+='<div class="panel" style="margin-bottom:16px">'
-          +'<div class="panel-bar"><h3>📦 '+esc(p.descricao)+'</h3>'
-          +'<div class="right"><span style="font-size:12px;color:var(--txt-faint)">Saldo: <b>'+saldoAtual+'</b> · '+totalSai+' saídas · '+totalEnt+' entradas</span>'
-          +'<button class="btn ghost sm" onclick="_busca_pdf_prod(\''+p.id+'\')" style="margin-left:8px">🖨 PDF</button></div></div>'
-          +(rowsProd?'<div class="scroll-y" style="max-height:400px"><table><thead><tr><th>Data</th><th>Colaborador</th><th>Tam.</th><th>Tipo</th><th class="num">Qtd</th><th>Liberado por</th></tr></thead><tbody>'+rowsProd+'</tbody></table></div>'
-            :'<div class="empty">Nenhuma saída registrada.</div>')
-          +'</div>';
-      });
-    }
-    if(!colabNom&&!prodMatch.length){
-      resultHtml='<div class="empty">Nenhum colaborador ou EPI encontrado para "<b>'+esc(q)+'</b>".</div>';
-    }
+  var ql=q.toLowerCase();
+
+  var movsFilt=MOVS.filter(function(m){
+    var prod=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+    var nomeEPI=(prod?prod.descricao:"").toLowerCase();
+    var nomeColab=(m.parte||"").toLowerCase();
+    var textOk=!q||(nomeEPI.includes(ql)||nomeColab.includes(ql));
+    var tamOk=!tam||(m.tamanho||"").toUpperCase()===tam;
+    var dataOk=true;
+    if(range.de) dataOk=dataOk&&(m.data>=range.de);
+    if(range.ate) dataOk=dataOk&&(m.data<=range.ate);
+    return textOk&&tamOk&&dataOk;
+  }).sort(function(a,b){return b.data>a.data?1:(b.data<a.data?-1:0);});
+
+  var totalSai=movsFilt.filter(function(m){return m.tipo==="saida";}).reduce(function(s,m){return s+m.qtd;},0);
+  var totalEnt=movsFilt.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+m.qtd;},0);
+  var saldoPer=totalEnt-totalSai;
+
+  function dbtn(v,label){
+    var act=dataMode===v;
+    return '<button class="btn'+(act?' primary':' ghost')+' sm" onclick="state.buscaData=\''+v+'\';render()">'+label+'</button>';
   }
-  return '<div class="selbar" style="gap:10px;flex-wrap:wrap">'
-    +'<div class="fg grow"><label>Buscar Colaborador ou EPI</label>'
-    +'<input id="busca_q" value="'+esc(q)+'" placeholder="Nome do colaborador ou nome do EPI…" style="width:100%"></div>'
-    +'<div class="fg"><label>Filtrar por</label>'
-    +'<select id="busca_tipo">'
-    +'<option value="auto"'+(tipo==="auto"?" selected":"")+'>Automático</option>'
-    +'<option value="colab"'+(tipo==="colab"?" selected":"")+'>Colaborador</option>'
-    +'<option value="produto"'+(tipo==="produto"?" selected":"")+'>EPI / Produto</option>'
-    +'</select></div>'
-    +'<button class="btn primary sm" onclick="_busca_run()" style="align-self:flex-end">Buscar</button>'
+
+  var rows="";
+  if(movsFilt.length){
+    rows=movsFilt.map(function(m){
+      var prod=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+      var isSai=m.tipo==="saida";
+      var borderC=isSai?"#e84040":"#27b863";
+      var badge=isSai
+        ?'<span style="background:#fde8e8;color:#c0392b;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700">SAIDA</span>'
+        :'<span style="background:#e6f9ef;color:#1a7a45;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700">ENTRADA</span>';
+      var tam2=m.tamanho?('<span class="chip tam">'+esc(m.tamanho)+'</span>'):"&mdash;";
+      var cor=m.cor?('<span class="chip">'+esc(m.cor)+'</span>'):"&mdash;";
+      return '<tr style="border-left:3px solid '+borderC+'">'
+        +'<td>'+fmtD(m.data)+'</td>'
+        +'<td>'+badge+'</td>'
+        +'<td>'+(prod?esc(prod.descricao):"?")+'</td>'
+        +'<td>'+tam2+'</td>'
+        +'<td>'+cor+'</td>'
+        +'<td>'+(isSai?esc(m.parte||"&mdash;"):"&mdash;")+'</td>'
+        +'<td class="num" style="color:'+(isSai?"#e84040":"#27b863")+';font-weight:700">'+(isSai?"-":"+")+m.qtd+'</td>'
+        +'<td>'+(isSai?esc(m.liberadoPor||"&mdash;"):"&mdash;")+'</td>'
+        +'</tr>';
+    }).join("");
+  }
+
+  var hasSearch=q.length>=2||tam||(dataMode!=="tudo");
+
+  return '<div style="padding:0 0 16px 0">'
+    +'<div class="selbar" style="gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+      +'<div class="fg" style="flex:1 1 220px"><label>EPI ou Colaborador</label>'
+        +'<input id="busca_q" value="'+esc(q)+'" placeholder="Nome do EPI ou do colaborador…" style="width:100%" onkeydown="if(event.key==\'Enter\')_busca_run()"></div>'
+      +'<div class="fg" style="flex:0 0 120px"><label>Tamanho</label>'
+        +'<input id="busca_tam" value="'+esc(tam)+'" placeholder="Ex: 42, P, M…" onkeydown="if(event.key==\'Enter\')_busca_run()"></div>'
+      +'<button class="btn primary sm" onclick="_busca_run()" style="align-self:flex-end;white-space:nowrap">🔍 Buscar</button>'
     +'</div>'
-    +(q.length>=2?resultHtml:'<div class="empty" style="padding:40px 0;text-align:center">Digite ao menos 2 caracteres para buscar.</div>');
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'
+      +'<span style="font-size:11px;color:var(--txt-dim);margin-right:4px">Período:</span>'
+      +dbtn("hoje","Hoje")+dbtn("semana","Esta semana")+dbtn("mes","Este mês")+dbtn("tudo","Tudo")
+      +'<button class="btn'+(dataMode==="custom"?" primary":" ghost")+' sm" onclick="state.buscaData=\'custom\';render()">Intervalo</button>'
+    +'</div>'
+    +(dataMode==="custom"
+      ?'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+        +'<div class="fg"><label>De</label><input type="date" id="busca_de" value="'+(state.buscaDe||"")+'" onchange="state.buscaDe=this.value;render()"></div>'
+        +'<div class="fg"><label>Até</label><input type="date" id="busca_ate" value="'+(state.buscaAte||"")+'" onchange="state.buscaAte=this.value;render()"></div>'
+        +'</div>'
+      :"")
+    +(hasSearch&&movsFilt.length
+      ?'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;align-items:center">'
+        +'<div style="background:#fde8e8;border-radius:10px;padding:10px 18px;text-align:center;min-width:90px">'
+          +'<div style="font-size:22px;font-weight:800;color:#c0392b">'+totalSai+'</div>'
+          +'<div style="font-size:10px;color:#888">Saídas (unid.)</div></div>'
+        +'<div style="background:#e6f9ef;border-radius:10px;padding:10px 18px;text-align:center;min-width:90px">'
+          +'<div style="font-size:22px;font-weight:800;color:#1a7a45">'+totalEnt+'</div>'
+          +'<div style="font-size:10px;color:#888">Entradas (unid.)</div></div>'
+        +'<div style="background:#eef0fb;border-radius:10px;padding:10px 18px;text-align:center;min-width:90px">'
+          +'<div style="font-size:22px;font-weight:800;color:#2D3277">'+(saldoPer>=0?"+":"")+saldoPer+'</div>'
+          +'<div style="font-size:10px;color:#888">Saldo período</div></div>'
+        +'<div style="background:#f5f5f5;border-radius:10px;padding:10px 18px;text-align:center;min-width:90px">'
+          +'<div style="font-size:22px;font-weight:800;color:#444">'+movsFilt.length+'</div>'
+          +'<div style="font-size:10px;color:#888">Registros</div></div>'
+        +'<button class="btn ghost sm" onclick="_busca_pdf()" style="margin-left:auto">🖸 Exportar PDF</button>'
+        +'</div>'
+      :"")
+    +(hasSearch
+      ?(rows
+        ?'<div class="panel"><div class="scroll-y" style="max-height:520px">'
+          +'<table><thead><tr>'
+            +'<th>Data</th><th>Tipo</th><th>EPI</th><th>Tam.</th><th>Cor/Tipo</th>'
+            +'<th>Colaborador</th><th class="num">Qtd</th><th>Liberado por</th>'
+          +'</tr></thead><tbody>'+rows+'</tbody></table>'
+          +'</div></div>'
+        :'<div class="empty" style="padding:32px 0;text-align:center">Nenhum registro encontrado para os filtros aplicados.</div>')
+      :'<div class="empty" style="padding:40px 0;text-align:center;color:var(--txt-dim)">Use os filtros acima para buscar movimentações.</div>')
+    +'</div>';
 }
 function _busca_run(){
   var q=(document.getElementById("busca_q")||{}).value||"";
-  var tipo=(document.getElementById("busca_tipo")||{}).value||"auto";
-  state.buscaQ=q;state.buscaTipo=tipo;render();
+  var tam=(document.getElementById("busca_tam")||{}).value||"";
+  state.buscaQ=q;state.buscaTam=tam;render();
 }
-function _busca_pdf_colab(nome){
-  var colabMovs=MOVS.filter(function(m){return m.tipo==="saida"&&(m.parte||"").toLowerCase()===nome.toLowerCase();}).sort(function(a,b){return b.data>a.data?1:-1;});
-  var rows=colabMovs.map(function(m){
-    var p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
-    var tam=m.tamanho||"—";var cor=m.cor||"—";
-    return '<tr><td>'+fmtD(m.data)+'</td><td>'+(p?esc(p.descricao):"?")+'</td><td>'+esc(tam)+'</td><td>'+esc(cor)+'</td><td style="text-align:center">'+m.qtd+'</td><td>'+esc(m.liberadoPor||"—")+'</td></tr>';
+function _busca_pdf(){
+  var q=(state.buscaQ||"").trim();
+  var tam=(state.buscaTam||"").trim().toUpperCase();
+  var dataMode=state.buscaData||"tudo";
+  var range=_buscaDateRange();
+  var ql=q.toLowerCase();
+  var movsFilt=MOVS.filter(function(m){
+    var prod=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+    var nomeEPI=(prod?prod.descricao:"").toLowerCase();
+    var nomeColab=(m.parte||"").toLowerCase();
+    var textOk=!q||(nomeEPI.includes(ql)||nomeColab.includes(ql));
+    var tamOk=!tam||(m.tamanho||"").toUpperCase()===tam;
+    var dataOk=true;
+    if(range.de) dataOk=dataOk&&(m.data>=range.de);
+    if(range.ate) dataOk=dataOk&&(m.data<=range.ate);
+    return textOk&&tamOk&&dataOk;
+  }).sort(function(a,b){return b.data>a.data?1:(b.data<a.data?-1:0);});
+  var totalSai=movsFilt.filter(function(m){return m.tipo==="saida";}).reduce(function(s,m){return s+m.qtd;},0);
+  var totalEnt=movsFilt.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+m.qtd;},0);
+  var labels={hoje:"Hoje",semana:"Esta semana",mes:"Este mês",tudo:"Todo o período",custom:(range.de||"")+" a "+(range.ate||"")};
+  var periodoLabel=labels[dataMode]||"";
+  var rows=movsFilt.map(function(m){
+    var prod=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+    var isSai=m.tipo==="saida";
+    var bg=isSai?"#fff5f5":"#f5fff8";
+    var qtdStr=(isSai?"-":"+")+m.qtd;
+    return '<tr style="background:'+bg+'">'
+      +'<td>'+fmtD(m.data)+'</td>'
+      +'<td style="font-weight:700;color:'+(isSai?"#c0392b":"#1a7a45")+'">'+(isSai?"SAÍDA":"ENTRADA")+'</td>'
+      +'<td>'+(prod?esc(prod.descricao):"?")+'</td>'
+      +'<td>'+esc(m.tamanho||"—")+'</td>'
+      +'<td>'+esc(m.cor||"—")+'</td>'
+      +'<td>'+esc(isSai?(m.parte||"—"):"—")+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+(isSai?"#c0392b":"#1a7a45")+'">'+qtdStr+'</td>'
+      +'<td>'+esc(isSai?(m.liberadoPor||"—"):"—")+'</td>'
+      +'</tr>';
   }).join("");
-  var total=colabMovs.reduce(function(s,m){return s+m.qtd;},0);
-  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório — '+esc(nome)+'</title>'
-    +'<style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#1d2733}'
-    +'h1{font-size:16px;margin-bottom:4px}h2{font-size:13px;font-weight:normal;color:#666;margin-bottom:16px}'
-    +'table{width:100%;border-collapse:collapse}th{background:#2D3277;color:#fff;padding:7px 10px;font-size:11px;text-align:left}'
-    +'td{padding:6px 10px;border-bottom:1px solid #eee}tr:nth-child(even){background:#f7f9fb}'
-    +'.tot{margin-top:12px;font-weight:700;color:#2D3277}@media print{button{display:none}}</style></head><body>'
-    +'<button onclick="window.print()" style="margin-bottom:16px;padding:8px 16px;background:#2D3277;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨 Imprimir / PDF</button>'
-    +'<h1>Relatório de Entregas de EPI</h1><h2>Colaborador: '+esc(nome)+'</h2>'
-    +'<table><thead><tr><th>Data</th><th>EPI</th><th>Tamanho</th><th>Tipo</th><th>Qtd</th><th>Liberado por</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody></table>'
-    +'<div class="tot">Total: '+colabMovs.length+' entregas · '+total+' itens</div>'
-    +'</body></html>';
-  var blob=new Blob([html],{type:"text/html"});
-  var url=URL.createObjectURL(blob);
-  window.open(url,"_blank");
-}
-function _busca_pdf_prod(pid){
-  var p=PRODUTOS.find(function(x){return x.id===pid;});if(!p)return;
-  var prodSai=movOf(pid).filter(function(m){return m.tipo==="saida";}).sort(function(a,b){return b.data>a.data?1:-1;});
-  var prodEnt=movOf(pid).filter(function(m){return m.tipo==="entrada";});
-  var rows=prodSai.map(function(m){
-    var tam=m.tamanho||"—";var cor=m.cor||"—";
-    return '<tr><td>'+fmtD(m.data)+'</td><td>'+esc(m.parte||"—")+'</td><td>'+esc(tam)+'</td><td>'+esc(cor)+'</td><td style="text-align:center">'+m.qtd+'</td><td>'+esc(m.liberadoPor||"—")+'</td></tr>';
-  }).join("");
-  var totalSai=prodSai.reduce(function(s,m){return s+m.qtd;},0);
-  var totalEnt=prodEnt.reduce(function(s,m){return s+m.qtd;},0);
-  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório — '+esc(p.descricao)+'</title>'
-    +'<style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#1d2733}'
-    +'h1{font-size:16px;margin-bottom:4px}h2{font-size:13px;font-weight:normal;color:#666;margin-bottom:16px}'
-    +'table{width:100%;border-collapse:collapse}th{background:#2D3277;color:#fff;padding:7px 10px;font-size:11px;text-align:left}'
-    +'td{padding:6px 10px;border-bottom:1px solid #eee}tr:nth-child(even){background:#f7f9fb}'
-    +'.stats{display:flex;gap:24px;margin-bottom:16px}.stat{background:#f0f2f5;border-radius:8px;padding:10px 16px;text-align:center}'
-    +'.stat .v{font-size:22px;font-weight:800;color:#2D3277}.stat .l{font-size:10px;color:#666}'
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Busca — Controle de Estoque</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:11.5px;padding:20px;color:#1d2733}'
+    +'h1{font-size:15px;margin-bottom:2px}h2{font-size:12px;font-weight:normal;color:#666;margin-bottom:4px}'
+    +'.stats{display:flex;gap:16px;margin:12px 0}.stat{background:#f0f2f5;border-radius:8px;padding:8px 14px;text-align:center}'
+    +'.stat .v{font-size:20px;font-weight:800}.stat .l{font-size:9px;color:#888}'
+    +'table{width:100%;border-collapse:collapse;margin-top:12px}'
+    +'th{background:#2D3277;color:#fff;padding:6px 9px;font-size:10.5px;text-align:left}'
+    +'td{padding:5px 9px;border-bottom:1px solid #eee}'
     +'@media print{button{display:none}}</style></head><body>'
-    +'<button onclick="window.print()" style="margin-bottom:16px;padding:8px 16px;background:#2D3277;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨 Imprimir / PDF</button>'
-    +'<h1>Relatório de EPI</h1><h2>'+esc(p.descricao)+'</h2>'
-    +'<div class="stats"><div class="stat"><div class="v">'+atual(pid)+'</div><div class="l">Saldo atual</div></div>'
-    +'<div class="stat"><div class="v" style="color:#e84040">'+totalSai+'</div><div class="l">Total saídas</div></div>'
-    +'<div class="stat"><div class="v" style="color:#27b863">'+totalEnt+'</div><div class="l">Total entradas</div></div>'
-    +'<div class="stat"><div class="v">'+prodSai.length+'</div><div class="l">Registros</div></div></div>'
-    +'<table><thead><tr><th>Data</th><th>Colaborador</th><th>Tamanho</th><th>Tipo/Cor</th><th>Qtd</th><th>Liberado por</th></tr></thead>'
+    +'<button onclick="window.print()" style="margin-bottom:16px;padding:7px 14px;background:#2D3277;color:#fff;border:none;border-radius:6px;cursor:pointer">🖸 Imprimir / PDF</button>'
+    +'<h1>Relatório de Busca — Controle de Estoque SMG6/XMG2</h1>'
+    +(q?'<h2>Busca: <b>'+esc(q)+'</b>'+(tam?' · Tamanho: <b>'+esc(tam)+'</b>':'')+'</h2>':"")
+    +'<h2>Período: <b>'+periodoLabel+'</b></h2>'
+    +'<div class="stats">'
+      +'<div class="stat"><div class="v" style="color:#c0392b">'+totalSai+'</div><div class="l">Saídas</div></div>'
+      +'<div class="stat"><div class="v" style="color:#1a7a45">'+totalEnt+'</div><div class="l">Entradas</div></div>'
+      +'<div class="stat"><div class="v" style="color:#2D3277">'+movsFilt.length+'</div><div class="l">Registros</div></div>'
+    +'</div>'
+    +'<table><thead><tr><th>Data</th><th>Tipo</th><th>EPI</th><th>Tamanho</th><th>Cor/Tipo</th><th>Colaborador</th><th>Qtd</th><th>Liberado por</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'</body></html>';
   var blob=new Blob([html],{type:"text/html"});
-  var url=URL.createObjectURL(blob);
-  window.open(url,"_blank");
+  window.open(URL.createObjectURL(blob),"_blank");
 }
 function viewRel(){
   const dom=state.dom;
