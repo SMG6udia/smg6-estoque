@@ -1688,7 +1688,7 @@ function viewBusca(){
     var nomeEPI=(prod?prod.descricao:"").toLowerCase();
     var nomeColab=(m.parte||"").toLowerCase();
     var textOk=!q||(nomeEPI.includes(ql)||nomeColab.includes(ql));
-    var tamOk=!tam||(m.tamanho||"").toUpperCase()===tam;
+    var tamOk=!tam||(String(m.tamanho||"")).toUpperCase()===tam;
     var dataOk=true;
     if(range.de) dataOk=dataOk&&(m.data>=range.de);
     if(range.ate) dataOk=dataOk&&(m.data<=range.ate);
@@ -1794,7 +1794,7 @@ function _busca_pdf(){
     var nomeEPI=(prod?prod.descricao:"").toLowerCase();
     var nomeColab=(m.parte||"").toLowerCase();
     var textOk=!q||(nomeEPI.includes(ql)||nomeColab.includes(ql));
-    var tamOk=!tam||(m.tamanho||"").toUpperCase()===tam;
+    var tamOk=!tam||(String(m.tamanho||"")).toUpperCase()===tam;
     var dataOk=true;
     if(range.de) dataOk=dataOk&&(m.data>=range.de);
     if(range.ate) dataOk=dataOk&&(m.data<=range.ate);
