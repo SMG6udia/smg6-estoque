@@ -56,6 +56,8 @@ window.onerror=function(msg,src,line,col,err){
   .tbtn{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 13px;cursor:pointer;font-family:var(--body);font-weight:600;font-size:13px;color:var(--txt);transition:.12s}
   .tbtn:hover{border-color:var(--blue);background:#f3f8ff;color:var(--blue-d)}
   .tbtn:disabled{opacity:.4;cursor:not-allowed;background:#fff}
+  .mfield select:disabled,.mfield input:disabled,.field-locked{opacity:.45;cursor:not-allowed;background:#f2f3f5}
+  .btn.is-busy{opacity:.7;cursor:wait}
   .tbtn:disabled:hover{border-color:var(--line);color:var(--txt)}
   .tbtn .ic{font-size:15px;line-height:1}
   .tbtn .k{font-family:var(--mono);font-size:9.5px;color:var(--txt-faint);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:2px}
@@ -1294,6 +1296,8 @@ function viewEstoque(){
   <div class="toolbar">
     <button class="tbtn tb-green" data-act="entrada" ${hasSel?"":"disabled"}><span class="ic">↓</span> Entrada no Estoque <span class="k">F5</span></button>
     ${showSaida?`<button class="tbtn" data-act="saida" ${hasSel?"":"disabled"}><span class="ic">↑</span> Saída do Estoque <span class="k">F6</span></button>`:`<span style="font-size:12px;color:var(--txt-faint)">As entregas de EPI são feitas na aba <b style="color:var(--blue)">Colaboradores</b>.</span>`}
+    <span class="tb-sep"></span>
+    <button class="tbtn" data-act="ajusteEstoque" ${hasSel?"":"disabled"} title="Corrige o saldo diretamente, sem lançar uma entrada/saída manual"><span class="ic">&#9881;</span> Ajustar Estoque</button>
   </div>
   <div class="panel detail">
     <div class="panel-bar"><h3>${sel?"Movimentações":"Resumo de Estoque"}</h3>${hasSel?`<div class="right"><span style="font-size:12px;color:var(--txt-faint)">${esc(sel.descricao)}</span></div>`:""}</div>
@@ -2218,7 +2222,20 @@ function viewRel(){
   // ----- ESTOQUE ATUAL POR TAMANHO -----
   const tamRows=prodOf(dom).filter(p=>p.tamanhos&&p.tamanhos.length>0).map(p=>{
     const semTam=saldoVar(p.id,"",""); // estoque lançado sem tamanho atribuído
-    const tamCols=p.tamanhos.map(t=>{
+    const temCoresP=!!(p.cores&&p.cores.length);
+    // Com Tipo/Modelo cadastrado: mostra saldo por tipo × tamanho (evita agregado ambíguo entre tipos)
+    const tamCols=temCoresP
+      ? p.cores.map(function(cr){
+          var cols=p.tamanhos.map(function(t){
+            var st=saldoVar(p.id,t,cr);
+            return '<span style="display:inline-flex;flex-direction:column;align-items:center;min-width:48px;margin:3px">'
+              +'<span style="font-family:var(--mono);font-weight:700;font-size:15px;color:'+(st<=0?"var(--red)":"var(--blue)")+'">'+st+'</span>'
+              +'<span class="chip tam" style="margin-top:3px">'+esc(t)+'</span></span>';
+          }).join("");
+          return '<div style="margin-bottom:6px"><div style="font-size:10.5px;font-weight:700;color:var(--txt-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">'+esc(cr)+'</div>'
+            +'<div style="display:flex;flex-wrap:wrap">'+cols+'</div></div>';
+        }).join("")
+      : p.tamanhos.map(t=>{
       const st=saldoVar(p.id,t,"");
       return `<span style="display:inline-flex;flex-direction:column;align-items:center;min-width:48px;margin:3px">
         <span style="font-family:var(--mono);font-weight:700;font-size:15px;color:${st<=0?"var(--red)":"var(--blue)"}">${st}</span>
@@ -2242,7 +2259,7 @@ function viewRel(){
         <div class="nm">${esc(p.descricao)}${dom==="safety"&&caAtualProduto(p.id)?`<span class="ca">CA ${esc(caAtualProduto(p.id))}</span>`:""}</div>
         <div class="sd" style="color:${totProd<=0?"var(--red)":"var(--blue)"}">${totProd}<small> total</small></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0">${tamCols}${semTamChip}</div>
+      <div style="display:${temCoresP?"block":"flex"};flex-wrap:wrap;gap:4px;padding:4px 0">${tamCols}<div style="display:flex;flex-wrap:wrap">${semTamChip}</div></div>
       ${semTamAlert}
     </div>`;
   }).join("") || `<div class="empty">Nenhum produto com tamanhos cadastrados.</div>`;
@@ -3300,15 +3317,16 @@ function openModal(title, bodyHTML, buttons){
           var r=b.act&&b.act();
           if(r&&typeof r.then==="function"){
             btn._busy=true;
+            btn.classList.add("is-busy");
             var _oldHtml=btn.innerHTML, _oldDis=btn.disabled;
             btn.disabled=true;
             r.catch(function(e){console.error(e);}).then(function(){
               // Reabilita só se o botão ainda existir no DOM (modal não fechou)
-              if(btn.isConnected){btn._busy=false;btn.disabled=_oldDis;btn.innerHTML=_oldHtml;}
+              if(btn.isConnected){btn._busy=false;btn.classList.remove("is-busy");btn.disabled=_oldDis;btn.innerHTML=_oldHtml;}
             });
           }
         }
-        catch(e){console.error(e);btn._busy=false;}
+        catch(e){console.error(e);btn._busy=false;btn.classList.remove("is-busy");}
       };
       foot.appendChild(btn);
     });
@@ -3426,8 +3444,78 @@ function act(a){
   else if(a==="delProd")delProduto();
   else if(a==="entrada"&&selProd())formMov("entrada");
   else if(a==="saida"&&selProd())formMov("saida");
+  else if(a==="ajusteEstoque"&&selProd())formAjusteEstoque();
   else if(a==="novaEntrega")formEntrega("");
   else if(a==="csv")exportCSV();
+}
+
+/* ---- Ajuste de Estoque (correção direta de saldo, sem nova entrada/saída manual) ---- */
+function formAjusteEstoque(){
+  if(!canEdit()){toast("Apenas admin/operador podem ajustar estoque","erro");return;}
+  const p=selProd();if(!p)return;
+  const temTam=!!(p.tamanhos&&p.tamanhos.length);
+  const temCor=!!(p.cores&&p.cores.length);
+  const tamOpts=temTam?`<div class="mfield"><label>Tamanho <span class="req">*</span></label><select id="aj_tam"><option value="">— selecione —</option>${p.tamanhos.map(t=>`<option>${esc(t)}</option>`).join("")}</select></div>`:"";
+  const corOpts=temCor?`<div class="mfield"><label>Tipo/Modelo <span class="req">*</span></label><select id="aj_cor"><option value="">— selecione —</option>${p.cores.map(c=>`<option>${esc(c)}</option>`).join("")}</select></div>`:"";
+  let body='<div style="font-size:12px;color:var(--txt-dim);margin-bottom:10px;background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:9px 12px">'
+    +'Corrige o saldo do produto diretamente — sem precisar lançar uma nova entrada. A diferença é registrada automaticamente no perfil <b>Expurgo</b>, para auditoria no relatório.'
+    +'</div>'
+    +'<div class="mgrid">'+corOpts+tamOpts
+    +'<div class="mfield"><label>Saldo atual</label><input id="aj_saldo_atual" readonly value="'+((temTam||temCor)?"—":atual(p.id))+'"></div>'
+    +'<div class="mfield"><label>Novo saldo <span class="req">*</span></label><input type="number" id="aj_novo" min="0" step="1" placeholder="Informe o saldo correto" '+((temTam||temCor)?"disabled":"")+'></div>'
+    +'<div class="mfield full"><label>Motivo do ajuste <span class="req">*</span></label><input id="aj_motivo" placeholder="Ex: contagem física, correção de lançamento…"></div>'
+    +'</div>';
+  openModal("Ajustar Estoque · "+esc(p.descricao),body,[
+    {label:"Cancelar",cls:"ghost",act:closeModal},
+    {label:"Aplicar Ajuste",cls:"primary",act:submitAjusteEstoque}
+  ]);
+  setTimeout(function(){
+    var elTam=document.getElementById("aj_tam"),elCor=document.getElementById("aj_cor"),
+        elAtual=document.getElementById("aj_saldo_atual"),elNovo=document.getElementById("aj_novo");
+    function upd(){
+      if(temTam&&elTam&&!elTam.value){elAtual.value="—";if(elNovo)elNovo.disabled=true;return;}
+      if(temCor&&elCor&&!elCor.value){elAtual.value="—";if(elNovo)elNovo.disabled=true;return;}
+      var tamSel=temTam?elTam.value:"";
+      var corSel=temCor?elCor.value:"";
+      var s=temTam?saldoVar(p.id,tamSel,corSel):(temCor?saldoVar(p.id,"",corSel):atual(p.id));
+      elAtual.value=s;
+      if(elNovo){elNovo.disabled=false;if(!elNovo.value)elNovo.value=s;}
+    }
+    if(elTam)elTam.onchange=upd;
+    if(elCor)elCor.onchange=upd;
+    upd();
+  },0);
+}
+async function submitAjusteEstoque(){
+  const p=selProd();if(!p)return;
+  const temTam=!!(p.tamanhos&&p.tamanhos.length);
+  const temCor=!!(p.cores&&p.cores.length);
+  const tam=temTam?val("aj_tam"):"";
+  const cor=temCor?val("aj_cor"):"";
+  if(temTam&&!tam){toast("Selecione o tamanho","erro");return;}
+  if(temCor&&!cor){toast("Selecione o Tipo/Modelo","erro");return;}
+  const motivo=val("aj_motivo").trim();
+  if(!motivo){toast("Informe o motivo do ajuste","erro");return;}
+  const novoStr=val("aj_novo");
+  if(novoStr===""||isNaN(Number(novoStr))||Number(novoStr)<0){toast("Informe um saldo válido","erro");return;}
+  const novo=Math.round(Number(novoStr));
+  const atualSaldo=temTam?saldoVar(p.id,tam,cor):(temCor?saldoVar(p.id,"",cor):atual(p.id));
+  const delta=novo-atualSaldo;
+  if(delta===0){toast("O saldo informado já é o saldo atual.","warn");return;}
+  const u=getUser();
+  const libNome=u?(u.nome||u.email||"Sistema"):"Sistema";
+  const mov={id:uid(),_t:Date.now(),produtoId:p.id,dom:p.dom,
+    tipo:delta>0?"entrada":"saida",
+    data:today(),qtd:Math.abs(delta),tamanho:tam,cor,
+    parte:"Expurgo",liberadoPor:libNome,usuario:libNome,genero:"Unissex",
+    obs:"Ajuste de estoque: "+atualSaldo+" \u2192 "+novo+" \u2014 "+motivo
+  };
+  const r=await persistMov(mov);
+  if(!r){toast("Erro ao salvar ajuste","erro");return;}
+  MOVS.push(mov);
+  closeModal();
+  toast("Estoque ajustado: "+atualSaldo+" \u2192 "+novo,"ok");
+  render();
 }
 
 /* ---- Produto ---- */
@@ -3603,8 +3691,8 @@ function _wz_step1(prods,prefColab){
     +'<div class="mgrid">'
     +'<div class="mfield"><label>Data <span class="req">*</span></label><input type="date" id="ew_data" value="'+today()+'"></div>'
     +'<input type="hidden" id="ew_lib" value="">'
-    +'<div class="mfield"><label>Unidade</label><select id="ew_unidade"><option value="">— todas —</option><option value="SMG6_AM">SMG6 AM</option><option value="SMG6_PM">SMG6 PM</option><option value="XMG2">XMG2</option></select></div>'
-    +'<div class="mfield full"><label>Colaborador (recebe) <span class="req">*</span></label><input list="ew_colab_list" id="ew_colab" placeholder="Digite ou selecione..." value="'+esc(prefColab||'')+'"><datalist id="ew_colab_list">'+colabDataOpts+'</datalist></div>'
+    +'<div class="mfield"><label>1&#65039;&#8419; Unidade <span class="req">*</span></label><select id="ew_unidade"><option value="">— selecione —</option><option value="SMG6_AM">SMG6 AM</option><option value="SMG6_PM">SMG6 PM</option><option value="XMG2">XMG2</option></select></div>'
+    +'<div class="mfield full"><label>2&#65039;&#8419; Colaborador (recebe) <span class="req">*</span></label><input list="ew_colab_list" id="ew_colab" placeholder="Selecione a unidade primeiro..." value="'+esc(prefColab||'')+'" disabled><datalist id="ew_colab_list">'+colabDataOpts+'</datalist></div>'
     +'</div>'
     +'<div style="margin:14px 0 4px;font-size:11.5px;font-weight:700;color:var(--txt-dim);text-transform:uppercase;letter-spacing:.07em">EPIs a entregar</div>'
     +'<div id="ew_lista_itens" style="min-height:40px;border:1.5px dashed var(--line);border-radius:8px;padding:8px 10px;margin-bottom:12px">'
@@ -3613,19 +3701,19 @@ function _wz_step1(prods,prefColab){
     +'<div style="background:#f7f9fb;border-radius:8px;padding:12px 14px;border:1px solid var(--line)">'
     +'<div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:10px;text-transform:uppercase;letter-spacing:.07em">&#43; Adicionar EPI à lista</div>'
     +'<div class="mgrid">'
-    +'<div class="mfield full"><label>EPI / Produto <span class="req">*</span></label><select id="ew_prod">'+prodOpts+'</select></div>'
-    +'<div id="ew_tipo_wrap" class="mfield full" style="display:none"><label>Tipo / Modelo <span style="font-size:10px;color:var(--txt-faint)">(opcional)</span></label><select id="ew_tipo"><option value="">— nenhum —</option></select></div>'
-    +'<div class="mfield"><label>Tamanho</label><select id="ew_tam"><option value="">&#8212;</option></select></div>'
+    +'<div class="mfield full"><label>3&#65039;&#8419; EPI / Produto <span class="req">*</span></label><select id="ew_prod" disabled>'+prodOpts+'</select></div>'
+    +'<div id="ew_tipo_wrap" class="mfield full" style="display:none"><label>4&#65039;&#8419; Tipo / Modelo <span style="font-size:10px;color:var(--txt-faint)">(opcional)</span></label><select id="ew_tipo" disabled><option value="">— nenhum —</option></select></div>'
+    +'<div class="mfield"><label>5&#65039;&#8419; Tamanho</label><select id="ew_tam" disabled><option value="">&#8212;</option></select></div>'
     +'<div class="mfield"><label>Dispon&iacute;vel</label><input id="ew_disp" readonly value="&#8212;"></div>'
-    +'<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="ew_qtd" min="1" step="1" value="1"></div>'
-    +'<div class="mfield"><label>Motivo <span class="req">*</span></label><select id="ew_motivo"><option value="">&#8212; selecione &#8212;</option><option value="Primeiro Item">Primeiro Item</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
-    +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: detalhe adicional&#8230;"></div>'
+    +'<div class="mfield"><label>Quantidade <span class="req">*</span></label><input type="number" id="ew_qtd" min="1" step="1" value="1" disabled></div>'
+    +'<div class="mfield"><label>6&#65039;&#8419; Motivo <span class="req">*</span></label><select id="ew_motivo" disabled><option value="">&#8212; selecione &#8212;</option><option value="Primeiro Item">Primeiro Item</option><option value="Dano">Dano</option><option value="Perda">Perda</option><option value="Desgaste">Desgaste</option></select></div>'
+    +'<div class="mfield full"><label>Observa&ccedil;&otilde;es</label><input id="ew_obs" placeholder="Ex: detalhe adicional&#8230;" disabled></div>'
     +'</div>'
-    +'<button type="button" class="btn primary sm" style="margin-top:4px" onclick="_wz_adicionarItem()">&#43; Adicionar à lista</button>'
+    +'<button type="button" class="btn primary sm" id="ew_add_btn" style="margin-top:4px" onclick="_wz_adicionarItem()" disabled>&#43; Adicionar à lista</button>'
     +'</div>';
-  openModal("Nova Entrega de EPI \u2014 Etapa 1 de 3",body,[
+  openModal("Nova Entrega de EPI — Etapa 1 de 3",body,[
     {label:"Cancelar",cls:"ghost",act:function(){closeModal();}},
-    {label:"Pr&oacute;ximo: Foto \u2192",cls:"primary",act:_wz_validarDados}
+    {label:"Pr&oacute;ximo: Foto →",cls:"primary",act:_wz_validarDados}
   ]);
 
 
@@ -3636,13 +3724,45 @@ function _wz_step1(prods,prefColab){
         cp=document.getElementById("ew_colab"),
         da=document.getElementById("ew_data"),
         eu=document.getElementById("ew_unidade"),
-        elib=document.getElementById("ew_lib");
+        elib=document.getElementById("ew_lib"),
+        qs=document.getElementById("ew_qtd"),
+        ms=document.getElementById("ew_motivo"),
+        os_=document.getElementById("ew_obs"),
+        addBtn=document.getElementById("ew_add_btn");
     // Populate Liberado Por with admin+operador users
     // Auto-fill Liberado Por com usuário logado
     if(elib){
       var _cu=getUser();
       elib.value=_cu?(_cu.nome||_cu.email||""):"";
     }
+
+    /* ── Liberação progressiva de campos ──
+       Unidade → Colaborador → Produto → Tipo/Modelo → Tamanho → Qtd/Motivo/Obs/Adicionar */
+    function lock(el){if(!el)return;el.disabled=true;el.classList.add("field-locked");}
+    function unlock(el){if(!el)return;el.disabled=false;el.classList.remove("field-locked");}
+
+    function lockFromProduto(){
+      if(ps){ps.value="";}
+      lock(ps);
+      lockFromTipo();
+    }
+    function lockFromTipo(){
+      var tipoWrap=document.getElementById("ew_tipo_wrap");
+      var tipoSel=document.getElementById("ew_tipo");
+      if(tipoSel){tipoSel.value="";lock(tipoSel);}
+      if(tipoWrap)tipoWrap.style.display="none";
+      lockFromTamanho();
+    }
+    function lockFromTamanho(){
+      if(ts){ts.innerHTML='<option value="">&#8212;</option>';lock(ts);}
+      if(disp)disp.value="—";
+      lockFromQtdMotivo();
+    }
+    function lockFromQtdMotivo(){
+      lock(qs);lock(ms);lock(os_);lock(addBtn);
+      if(ms)ms.value="";
+    }
+
     // Refresh collaborator datalist based on selected unit/shift
     function _refreshColabList(){
       var dl=document.getElementById("ew_colab_list");
@@ -3658,7 +3778,20 @@ function _wz_step1(prods,prefColab){
       // Clear colab input when unit changes (unless typed value still valid)
       if(cp){var cur=cp.value;if(cur&&!list.includes(cur))cp.value="";}
     }
-    if(eu)eu.onchange=function(){_refreshColabList();chk();};
+    if(eu)eu.onchange=function(){
+      if(cp)cp.value="";
+      lockFromProduto();
+      if(eu.value){
+        _refreshColabList();
+        unlock(cp);
+      } else {
+        lock(cp);
+      }
+      chk();
+    };
+    // Estado inicial: unidade ainda não selecionada → colaborador travado
+    lock(cp);
+
     // Retorna tamanhos que aparecem em entradas de um produto+cor, ou todos se nenhum entrada
     function tamsPorTipo(pr,corSel){
       if(!pr||!pr.tamanhos||!pr.tamanhos.length)return[];
@@ -3684,34 +3817,40 @@ function _wz_step1(prods,prefColab){
       if(!pr||!pr.tamanhos||!pr.tamanhos.length)return;
       var tams=tamsPorTipo(pr,corSel);
       tams.forEach(function(t){ts.innerHTML+='<option>'+esc(t)+'</option>';});
-      if(tams.length>0)ts.value=tams[0];
+      // Não pré-seleciona nenhum tamanho — usuário deve escolher explicitamente
     }
     function fill(){
       var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
+      lockFromTipo(); // reseta tudo depois do produto sempre que ele muda
+      if(!pr){return;}
       // Preencher campo Tipo/Modelo se o produto tiver cores/tipos cadastrados
       var tipoWrap=document.getElementById("ew_tipo_wrap");
       var tipoSel=document.getElementById("ew_tipo");
       var tipoLbl=tipoWrap?tipoWrap.querySelector("label"):null;
       if(tipoSel){
-        tipoSel.innerHTML='<option value="">— nenhum —</option>';
-        if(pr&&pr.cores&&pr.cores.length){
+        tipoSel.innerHTML='<option value="">— selecione —</option>';
+        if(pr.cores&&pr.cores.length){
           pr.cores.forEach(function(cor){tipoSel.innerHTML+='<option>'+esc(cor)+'</option>';});
           if(tipoWrap)tipoWrap.style.display="";
-          // Marca como obrigatório se tipos têm tamanhos diferentes
+          unlock(tipoSel);
+          // Marca como obrigatório se tipos têm tamanhos diferentes (ou sempre — precisa ser escolhido antes do tamanho)
           var req=tiposComTamsDiferentes(pr);
           if(tipoLbl){
-            tipoLbl.innerHTML=req
-              ?'Tipo / Modelo <span class="req">*</span>'
-              :'Tipo / Modelo <span style="font-size:10px;color:var(--txt-faint)">(opcional)</span>';
+            tipoLbl.innerHTML="4&#65039;&#8419; "+'Tipo / Modelo <span class="req">*</span>'+(req?' <span style="font-size:9px;color:var(--txt-faint)">(tamanhos variam por tipo)</span>':'');
           }
-          tipoSel._tipoObrigatorio=req;
+          tipoSel._tipoObrigatorio=true; // sempre obrigatório selecionar antes do tamanho
         }else{
           if(tipoWrap)tipoWrap.style.display="none";
           if(tipoSel)tipoSel._tipoObrigatorio=false;
+          // Sem tipo/cor — libera tamanho direto (se houver) ou qtd/motivo
+          if(pr.tamanhos&&pr.tamanhos.length){
+            fillTams(pr,"");
+            unlock(ts);
+          }else{
+            unlock(qs);unlock(ms);unlock(os_);unlock(addBtn);
+          }
         }
       }
-      var corSel=tipoSel?tipoSel.value:"";
-      fillTams(pr,corSel);
       upd();
     }
     function upd(){
@@ -3723,7 +3862,7 @@ function _wz_step1(prods,prefColab){
         var tamSel=ts?ts.value:"";
         var tipoEl=document.getElementById("ew_tipo");
         var corSel=tipoEl?tipoEl.value:"";
-        disp.value=tamSel?saldoVar(pr.id,tamSel,corSel):atual(pr.id);
+        disp.value=tamSel?saldoVar(pr.id,tamSel,corSel):"—";
       }else{
         var tipoEl2=document.getElementById("ew_tipo");
         var corSel2=tipoEl2?tipoEl2.value:"";
@@ -3750,21 +3889,38 @@ function _wz_step1(prods,prefColab){
       }
     }
     if(ps)ps.onchange=fill;
-    if(ts)ts.onchange=upd;
+    if(ts)ts.onchange=function(){
+      upd();
+      if(ts.value){unlock(qs);unlock(ms);unlock(os_);unlock(addBtn);}
+      else{lock(qs);lock(ms);lock(os_);lock(addBtn);}
+    };
     var ewTipo=document.getElementById("ew_tipo");
     if(ewTipo)ewTipo.onchange=function(){
       var pr=PRODUTOS.find(function(x){return x.id===ps.value;});
+      lockFromTamanho();
+      if(!ewTipo.value)return; // ainda não escolheu o tipo — mantém tudo travado
       fillTams(pr,ewTipo.value);
+      if(pr&&pr.tamanhos&&pr.tamanhos.length){
+        unlock(ts);
+      }else{
+        unlock(qs);unlock(ms);unlock(os_);unlock(addBtn);
+      }
       upd();
     };
     if(cp){
+      var _cpLastNome=""; // rastreia o último valor "efetivo" para saber se realmente mudou
+      cp.oninput=function(){chk();}; // leve: só o alerta de retirada recente, roda a cada tecla
       cp.onchange=function(){
         chk();
+        var colabNome=cp.value.trim();
+        if(colabNome===_cpLastNome)return; // mesmo colaborador — não reseta a cadeia
+        _cpLastNome=colabNome;
+        // Mudou o colaborador de fato — sempre retrava Produto e tudo depois (reinicia a cadeia)
+        lockFromProduto();
+        if(!colabNome){return;}
         // Filter product list by collaborator gender
-        var colabNome=cp.value;
-        var colabGenero=colabNome?colabGeneroOf(colabNome):null;
+        var colabGenero=colabGeneroOf(colabNome);
         if(ps){
-          var prevVal=ps.value;
           ps.innerHTML='<option value="">— selecione —</option>';
           prods.forEach(function(p){
             var pg=p.genero||"Unissex";
@@ -3772,14 +3928,13 @@ function _wz_step1(prods,prefColab){
               ps.innerHTML+='<option value="'+p.id+'">'+esc(p.descricao)+'</option>';
             }
           });
-          ps.value=prevVal||"";
-          fill();
+          unlock(ps);
         }
       };
     }
     if(da)da.onchange=chk;
-    // Inicializa saldo se produto já vier pré-selecionado ao abrir o modal
-    if(ps&&ps.value) fill(); else upd();
+    // Estado inicial: tudo travado até a Unidade ser escolhida (sem pré-seleção)
+    lockFromProduto();
   },0);
 }
 
@@ -3814,15 +3969,15 @@ function _wz_adicionarItem(){
   var tipoModelo=((document.getElementById("ew_tipo")||{}).value)||"";
   var p=PRODUTOS.find(function(x){return x.id===prod;});
   if(!prod){toast("Selecione um EPI","erro");return;}
+  if(p&&p.cores&&p.cores.length&&!tipoModelo){toast("Selecione o Tipo / Modelo","erro");return;}
+  if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
   if(!qtd||qtd<=0){toast("Informe a quantidade","erro");return;}
   if(!motivo){toast("Selecione o motivo","erro");return;}
-  if(p&&p.tamanhos&&p.tamanhos.length&&!tam){toast("Selecione o tamanho","erro");return;}
-  var tipoEl2=document.getElementById("ew_tipo");
-  if(tipoEl2&&tipoEl2._tipoObrigatorio&&!tipoModelo){toast("Selecione o Tipo / Modelo (obrigatório para este EPI)","erro");return;}
-  // Calcula qtd já na lista para esse produto+tamanho
-  var qtdNaLista=EPI_WZ.itens.filter(function(it){return it.prod===prod&&it.tam===tam;}).reduce(function(s,it){return s+it.qtd;},0);
-  var saldo=tam?saldoVar(prod,tam,""):atual(prod);
-  if(qtdNaLista+qtd>saldo){toast("Estoque insuficiente"+(tam?" (tam. "+tam+")":"")+". Disponível: "+saldo+" · Na lista: "+qtdNaLista+".","erro");return;}
+  // Calcula qtd já na lista para esse produto+tamanho+tipo (mesma combinação exata)
+  var qtdNaLista=EPI_WZ.itens.filter(function(it){return it.prod===prod&&it.tam===tam&&it.tipoModelo===tipoModelo;}).reduce(function(s,it){return s+it.qtd;},0);
+  // Saldo considera Tipo/Modelo específico (evita contagem agregada incorreta entre tipos diferentes)
+  var saldo=tam?saldoVar(prod,tam,tipoModelo):(tipoModelo?saldoVar(prod,"",tipoModelo):atual(prod));
+  if(qtdNaLista+qtd>saldo){toast("Estoque insuficiente"+(tam?" (tam. "+tam+")":"")+(tipoModelo?" ("+tipoModelo+")":"")+". Disponível: "+saldo+" · Na lista: "+qtdNaLista+".","erro");return;}
   // Agrupa com item igual se existir
   var existente=EPI_WZ.itens.find(function(it){return it.prod===prod&&it.tam===tam&&it.tipoModelo===tipoModelo&&it.motivo===motivo;});
   if(existente){
@@ -3831,15 +3986,18 @@ function _wz_adicionarItem(){
   }else{
     EPI_WZ.itens.push({prod:prod,descricao:p?p.descricao:prod,tam:tam,qtd:qtd,obs:obs,motivo:motivo,tipoModelo:tipoModelo});
   }
-  // Limpa campos de produto para facilitar próxima adição
+  // Limpa campos de produto para facilitar próxima adição (Colaborador permanece selecionado)
   var ps=document.getElementById("ew_prod"),ts=document.getElementById("ew_tam"),
       ms=document.getElementById("ew_motivo"),qs=document.getElementById("ew_qtd"),
-      os=document.getElementById("ew_obs"),disp=document.getElementById("ew_disp");
+      os=document.getElementById("ew_obs"),disp=document.getElementById("ew_disp"),
+      tipoSel=document.getElementById("ew_tipo"),addBtn=document.getElementById("ew_add_btn");
   if(ps)ps.value="";
-  if(ts)ts.innerHTML='<option value="">&#8212;</option>';
-  if(ms)ms.value="";
-  if(qs)qs.value="1";
-  if(os)os.value="";
+  if(tipoSel){tipoSel.value="";tipoSel.disabled=true;tipoSel.classList.add("field-locked");}
+  if(ts){ts.innerHTML='<option value="">&#8212;</option>';ts.disabled=true;ts.classList.add("field-locked");}
+  if(ms){ms.value="";ms.disabled=true;ms.classList.add("field-locked");}
+  if(qs){qs.value="1";qs.disabled=true;qs.classList.add("field-locked");}
+  if(os){os.value="";os.disabled=true;os.classList.add("field-locked");}
+  if(addBtn){addBtn.disabled=true;addBtn.classList.add("field-locked");}
   if(disp)disp.value="—";
   var tw=document.getElementById("ew_tipo_wrap");if(tw)tw.style.display="none";
   _wz_renderListaItens();
