@@ -296,7 +296,7 @@ const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","
 const MESES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const ALERTA_DIAS=15;
 /* ── Google Sheets / Apps Script ── */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8Mh529wkBHRF28VZY4wLENSwAADyxJa1htNKkohc0xvCHo2HVp2fU1raj9vxw3iIA6Q/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzL7XKN1wukGYQjMr3hOEh6Ydd-DY8JmJpgs6SVaPvlbDwAVPIJOsVXtA_nYMjeqr2nhA/exec"; // linha 192 — cole a URL do Apps Script da conta @gmail.com
 const DRIVE_FOLDER_EPI = "1xIq3muw068guiHAPAEe17NA_pyjUTpPg";
 let   DRIVE_STATUS = "idle";
 
@@ -593,6 +593,7 @@ function colabUnidadeOf(nome){
   // colaboradores sem unidade cadastrada = SMG6 (padrão histórico)
   return "SMG6";
 }
+function isExpurgo(nome){return String(nome||"").trim().toLowerCase()==="expurgo";}
 function colabTurnoOf(nome){
   var _nl=(nome||"").toLowerCase();
   const c=COLABORADORES.find(function(x){return (x.nome||"").toLowerCase()===_nl;});
@@ -609,9 +610,15 @@ function colabListaAtivos(dom,unidade,turno){
   var _deduped=[];
   base.forEach(function(n){var k=(n||"").toLowerCase();if(!_seenNames[k]){_seenNames[k]=n;_deduped.push(n);}});
   let lista=_deduped.filter(n=>!DESLIGADOS.some(d=>d.toLowerCase()===n.toLowerCase()));
+  // Expurgo é perfil fixo do sistema — nunca filtrar por unidade/turno
+  var _temExpurgo=lista.some(function(n){return isExpurgo(n);});
+  lista=lista.filter(function(n){return !isExpurgo(n);});
   if(unidade){lista=lista.filter(function(n){return colabUnidadeOf(n)===unidade;});}
   if(unidade==="SMG6"&&turno){lista=lista.filter(function(n){var t=colabTurnoOf(n);return !t||t===turno;});}
-  return lista.sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  lista=lista.sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  // Sempre inclui Expurgo no topo (apenas Safety), independente dos filtros
+  if(dom==="safety"){lista.unshift("Expurgo");}
+  return lista;
 }
 function mesLabel(ym){const[y,m]=ym.split("-");return MESES[Number(m)-1]+"/"+y;}
 function monthRange(ym){const[y,m]=ym.split("-").map(Number);const last=new Date(y,m,0).getDate();return{start:`${ym}-01`,end:`${ym}-${String(last).padStart(2,"0")}`};}
@@ -1361,7 +1368,7 @@ function viewColabList(){
         +'<td class="num" style="display:flex;gap:4px;justify-content:flex-end">'+reciboBtn+'<button class="icon-btn del" title="Excluir" data-delmov="'+r.id+'">&#128465;</button></td></tr>';
     }).join("");
     const chips=Object.entries(porProd).sort((a,b)=>b[1]-a[1]).map(([p,q])=>`<span class="chip tam" style="margin:3px">${esc(p)}: <b>${q}</b></span>`).join("");
-    const btnDesl=(dom==="safety"&&isAdmin())?`<button class="btn danger sm" onclick="desligarColab('${esc(colabSel)}')">⚠ Desligar Colaborador</button>`:"";
+    const btnDesl=(dom==="safety"&&isAdmin()&&!isExpurgo(colabSel))?`<button class="btn danger sm" onclick="desligarColab('${esc(colabSel)}')">⚠ Desligar Colaborador</button>`:"";
     return `<div class="panel">
       <div class="panel-bar"><h3>Colaboradores · ${dom==="safety"?"Safety":"Insumos"}</h3><div class="right" style="gap:8px">${btnRelColab}${btnCad}${btn}</div></div>
       ${selectHtml}
@@ -1670,6 +1677,7 @@ function formCadastroColab(colab){
 
 async function desligarColab(nome){
   if(!isAdmin()){toast("Apenas administradores podem desligar colaboradores","erro");return;}
+  if(isExpurgo(nome)){toast("O perfil Expurgo é fixo do sistema e não pode ser desligado.","erro");return;}
   const ok=await confirmModal("Desligar Colaborador",`Mover <b>${esc(nome)}</b> para a lista de desligados? O histórico será preservado.`,"Desligar");
   if(!ok)return;
   if(!DESLIGADOS.includes(nome)){DESLIGADOS.push(nome);}
@@ -1959,7 +1967,7 @@ function viewRel(){
     // entradas não se aplicam ao relatório por unidade
     ent=[];valEnt=0;qtdEnt=0;
   }
-  const porColab={};sai.forEach(s=>{if(s.parte)porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
+  const porColab={};sai.forEach(s=>{if(s.parte&&!isExpurgo(s.parte))porColab[s.parte]=(porColab[s.parte]||0)+s.qtd;});
   // Painel: saídas por EPI / Tipo
   var _porTipo={};
   sai.forEach(function(s){
@@ -2038,6 +2046,40 @@ function viewRel(){
     }).join("") || `<div class="empty">Sem retiradas no período.</div>`;
     colabBlock=`<div class="panel"><div class="panel-bar"><h3>Quem mais retirou — ${periodoLbl}</h3></div>
       <div class="scroll-y" style="max-height:440px">${colabRows}</div></div>`;
+  }
+
+  // ----- Ajustes de estoque via EXPURGO (Safety) -----
+  let expurgoBlock="";
+  if(dom==="safety"){
+    const expurgoMovs=sai.filter(function(m){return isExpurgo(m.parte);})
+      .slice().sort(function(a,b){return a.data<b.data?1:(a.data>b.data?-1:0);});
+    const expTotal=expurgoMovs.reduce(function(s,m){return s+m.qtd;},0);
+    const expRows=expurgoMovs.map(function(m){
+      var p=PRODUTOS.find(function(x){return x.id===m.produtoId;});
+      var motivo=(m.obs||"").replace(/\[COD:.*?\]/g,"").trim();
+      var tam=m.tamanho?('<span class="chip tam">'+esc(m.tamanho)+'</span>'):"";
+      var cor=m.cor?('<span class="chip">'+esc(m.cor)+'</span>'):"";
+      return '<tr>'
+        +'<td style="white-space:nowrap">'+fmtD(m.data)+'</td>'
+        +'<td><b>'+(p?esc(p.descricao):"?")+'</b></td>'
+        +'<td>'+(tam||"&mdash;")+' '+cor+'</td>'
+        +'<td style="text-align:center;color:#c0392b;font-weight:700">'+m.qtd+'</td>'
+        +'<td>'+esc(m.liberadoPor||"&mdash;")+'</td>'
+        +'<td style="font-size:11px;color:var(--txt-faint)">'+esc(motivo||"&mdash;")+'</td>'
+        +'</tr>';
+    }).join("");
+    expurgoBlock=expurgoMovs.length
+      ?'<div class="panel" style="grid-column:1/-1;border:1px solid #f0c36d;background:#fffdf5">'
+        +'<div class="panel-bar" style="background:#fff8e6"><h3>&#9888; Ajustes de Estoque (Expurgo) — '+periodoLbl+'</h3>'
+        +'<div class="right"><span style="font-size:12px;color:#946200;font-weight:700">'+expurgoMovs.length+' baixas · '+expTotal+' itens</span></div></div>'
+        +'<div style="padding:6px 16px 0;font-size:11.5px;color:var(--txt-dim)">Saídas registradas no perfil <b>Expurgo</b> para acerto de saldo (itens entregues sem baixa no sistema). Confira antes de considerar divergência.</div>'
+        +'<div class="scroll-y" style="max-height:380px;padding:8px 16px 16px"><table style="width:100%;border-collapse:collapse">'
+        +'<thead><tr style="text-align:left;border-bottom:2px solid #f0c36d">'
+        +'<th style="padding:6px 8px;font-size:11px">Data</th><th style="padding:6px 8px;font-size:11px">EPI</th>'
+        +'<th style="padding:6px 8px;font-size:11px">Tam./Tipo</th><th style="padding:6px 8px;font-size:11px;text-align:center">Qtd</th>'
+        +'<th style="padding:6px 8px;font-size:11px">Registrado por</th><th style="padding:6px 8px;font-size:11px">Motivo</th></tr></thead>'
+        +'<tbody>'+expRows+'</tbody></table></div></div>'
+      :"";
   }
 
   // ----- Resumo de totais para mini-gráfico de colunas -----
@@ -2214,7 +2256,7 @@ function viewRel(){
   var genMasc=COLABORADORES.filter(function(x){return !DESLIGADOS.some(function(d){return d.toLowerCase()===(x.nome||"").toLowerCase();})&&x.genero==="Masc.";}).length;
   var genFem=COLABORADORES.filter(function(x){return !DESLIGADOS.some(function(d){return d.toLowerCase()===(x.nome||"").toLowerCase();})&&x.genero==="Fem.";}).length;
   // Total real: usa colabListaAtivos para incluir COLAB_PLANILHA_ATIVOS
-  var _totalAtivosReal=colabListaAtivos(dom).length;
+  var _totalAtivosReal=colabListaAtivos(dom).filter(function(n){return !isExpurgo(n);}).length;
   var genNI=Math.max(0,_totalAtivosReal-genMasc-genFem);
   var genTotal=_totalAtivosReal||1;
   var pctM=Math.round(genMasc/genTotal*100);
@@ -2317,6 +2359,7 @@ function viewRel(){
         `Unidade <b>${repUnidade}</b>: saíram <b style="color:var(--red)">${qtdSai}</b> itens de EPI no período selecionado.`}
       </div>
     </div>
+    ${expurgoBlock}
     ${colabBlock||`<div class="panel"><div class="panel-bar"><h3>Itens sem Saldo</h3></div><div class="scroll-y" style="max-height:300px">${
       itens.filter(i=>i.fim<=0).map(i=>`<div class="itembar"><div class="top"><div class="nm">${esc(i.nome)}</div><div class="sd" style="color:var(--red)">${i.fim}</div></div></div>`).join("")||`<div class="empty">Todos os itens com saldo positivo.</div>`
     }</div></div>`}
@@ -3252,8 +3295,20 @@ function openModal(title, bodyHTML, buttons){
       btn.className="btn "+(b.cls||"ghost")+" sm";
       btn.innerHTML=b.label||"";
       btn.onclick=function(){
-        try{var r=b.act&&b.act();if(r&&typeof r.then==="function")r.catch(function(e){console.error(e);});}
-        catch(e){console.error(e);}
+        if(btn._busy)return; // impede duplo clique enquanto processa
+        try{
+          var r=b.act&&b.act();
+          if(r&&typeof r.then==="function"){
+            btn._busy=true;
+            var _oldHtml=btn.innerHTML, _oldDis=btn.disabled;
+            btn.disabled=true;
+            r.catch(function(e){console.error(e);}).then(function(){
+              // Reabilita só se o botão ainda existir no DOM (modal não fechou)
+              if(btn.isConnected){btn._busy=false;btn.disabled=_oldDis;btn.innerHTML=_oldHtml;}
+            });
+          }
+        }
+        catch(e){console.error(e);btn._busy=false;}
       };
       foot.appendChild(btn);
     });
@@ -4009,7 +4064,7 @@ async function _wz_finalizar(){
   if(EPI_WZ._saving){return;} // guard contra duplo envio
   EPI_WZ._saving=true;
   // Desabilita botão para evitar duplo envio
-  var _btnConf=document.querySelector(".modal-footer .btn.green");
+  var _btnConf=document.querySelector(".modal-foot .btn.green");
   if(_btnConf){_btnConf.disabled=true;_btnConf.textContent="Salvando…";}
   var c=document.getElementById("sig_canvas");
   EPI_WZ.assinDataUrl=c?c.toDataURL("image/png"):null;
@@ -4048,7 +4103,7 @@ async function _wz_finalizar(){
   if(!savedMovs.length){
     toast("Nenhum item pôde ser salvo.","erro");
     EPI_WZ._saving=false;
-    var _btnConf2=document.querySelector(".modal-footer .btn.green");
+    var _btnConf2=document.querySelector(".modal-foot .btn.green");
     if(_btnConf2){_btnConf2.disabled=false;_btnConf2.textContent="✓ Confirmar e Gerar Comprovante";}
     return;
   }
